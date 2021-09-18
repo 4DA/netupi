@@ -1,0 +1,15 @@
+[package]
+name = "time-tracker"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+druid = { git = "https://github.com/linebender/druid.git", features=['im']}
+ical = "0.6.*"
+
+# [dependencies.ical]
+# version = "0.6.*"
+# default-features = false
+# features = ["ical", "vcard"]
