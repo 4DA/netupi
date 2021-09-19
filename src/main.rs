@@ -17,7 +17,7 @@
 // On Windows platform, don't show a console when opening the app.
 #![windows_subsystem = "windows"]
 
-use druid::im::{vector, Vector};
+use druid::im::{vector, Vector, ordset, OrdSet};
 use druid::lens::{self, LensExt};
 use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll};
 use druid::{
@@ -42,7 +42,9 @@ fn type_of<T>(_: T) -> &'static str {
 
 #[derive(Clone, Data, Lens)]
 struct AppData {
-    tasks: Vector<Task>
+    tasks: Vector<Task>,
+    tags: Vector<String>,
+    focus: Vector<String>
 }
 
 #[derive(Debug, Clone, Data)]
@@ -62,13 +64,14 @@ impl Task {
     }
 }
 
-fn parse_ical() -> Vector<Task> {
+fn parse_ical() -> AppData {
     let buf = BufReader::new(File::open("/home/dc/Tasks.ics")
         .unwrap());
 
     let reader = ical::IcalParser::new(buf);
 
-    let mut result = Vector::new();
+    let mut tasks = Vector::new();
+    let mut tags = OrdSet::new();
 
     for line in reader {
         let ical = line.unwrap();
@@ -91,7 +94,9 @@ fn parse_ical() -> Vector<Task> {
                     "DESCRIPTION" => {description = property.value.clone();}
                     "CATEGORIES" => {
                         if (property.value.is_some()) {
-                            categories.insert(0,  property.value.as_ref().unwrap().clone())}
+                            categories.insert(0,  property.value.as_ref().unwrap().clone());
+                            tags.insert(property.value.as_ref().unwrap().clone());
+                        }
                     }
                     "STATUS" => {status = property.value.clone();}
                     "PRIORITY" => {
@@ -105,11 +110,14 @@ fn parse_ical() -> Vector<Task> {
             
             let task = Task::new(summary, description, uid, categories, priority, status);
             // println!("{:?}", task);
-            result.insert(0, task);
+            tasks.insert(0, task);
         }
     }
 
-    return result;
+    // let tags = vector![String::from("computer"), String::from("outside")];
+    let focus = vector![String::from("todo"), String::from("active"), String::from("done"), String::from("all") ];
+
+        return AppData{tasks, tags: tags.iter().map(|x : &String| {x.clone()}).collect(), focus};
 }
 
 fn re_emit() {
@@ -122,15 +130,11 @@ fn re_emit() {
 }
 
 pub fn main() {
-    let tasks = parse_ical();
+
+    let data = parse_ical();
     re_emit();
     let main_window = WindowDesc::new(ui_builder())
         .title(LocalizedString::new("list-demo-window-title").with_placeholder("List Demo"));
-
-    // Set our initial data
-    let data = AppData {
-        tasks,
-    };
     
     AppLauncher::with_window(main_window)
         .log_to_console()
@@ -141,18 +145,47 @@ pub fn main() {
 fn ui_builder() -> impl Widget<AppData> {
     let mut root = Flex::column();
 
-    // Build a button to add children to both lists
-    root.add_child(
-        Button::new("Add")
-            .on_click(|_, data: &mut AppData, _| {
-                // Add child to left list
+    let mut lists = Flex::row().cross_axis_alignment(CrossAxisAlignment::Start);
+    let mut left_bar = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
-            })
-            .fix_height(30.0)
-            .expand_width(),
+
+    left_bar.add_default_spacer();
+    left_bar.add_flex_child(Label::new("Focus"), 1.0);
+    left_bar.add_default_spacer();
+
+    left_bar.add_child(
+        Scroll::new(List::new(|| {
+            Label::new(|item: &String, _env: &_| format!("{}", item))
+                .align_vertical(UnitPoint::LEFT)
+                .padding(10.0)
+                .expand()
+                .height(30.0)
+                .background(Color::rgb(0.5, 0.5, 0.5))
+        }))
+        .vertical()
+        .lens(AppData::focus)
     );
 
-    let mut lists = Flex::row().cross_axis_alignment(CrossAxisAlignment::Start);
+    left_bar.add_default_spacer();
+    left_bar.add_child(Label::new("Tags"));
+    left_bar.add_default_spacer();
+
+    left_bar.add_flex_child(
+        Scroll::new(List::new(|| {
+            Label::new(|item: &String, _env: &_| format!("{}", item))
+                .align_vertical(UnitPoint::LEFT)
+                .padding(10.0)
+                .expand()
+                .height(30.0)
+                .background(Color::rgb(0.5, 0.5, 0.5))
+        }))
+        .vertical()
+        .lens(AppData::tags),
+        1.0,
+    );
+
+    lists.add_flex_child(left_bar, 0.5);
+
 
     // Build a list with shared data
     lists.add_flex_child(
@@ -199,6 +232,7 @@ fn ui_builder() -> impl Widget<AppData> {
 
     root.add_flex_child(lists, 1.0);
 
-    root.with_child(Label::new("horizontal list"))
+    root.with_child(Label::new("Current: LADR 15m/30m | Today: 2h | Week: 12h")
+                    .align_horizontal(UnitPoint::RIGHT))
 }
 
