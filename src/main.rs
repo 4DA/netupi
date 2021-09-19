@@ -31,6 +31,8 @@ use std::fs::File;
 
 use std::any::type_name;
 
+use std::rc::Rc;
+
 fn type_of<T>(_: T) -> &'static str {
     type_name::<T>()
 }
@@ -41,9 +43,10 @@ struct AppData {
     right: Vector<u32>,
     l_index: usize,
     r_index: usize,
+    tasks: Vector<Task>
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Data)]
 struct Task {
     name: String,
     description: Option<String>,
@@ -56,13 +59,13 @@ impl Task {
     }
 }
 
-fn parse_ical() -> Vec<Task> {
+fn parse_ical() -> Vector<Task> {
     let buf = BufReader::new(File::open("/home/dc/Tasks.ics")
         .unwrap());
 
     let reader = ical::IcalParser::new(buf);
 
-    let mut result = Vec::new();
+    let mut result = Vector::new();
 
     for line in reader {
         let ical = line.unwrap();
@@ -82,7 +85,7 @@ fn parse_ical() -> Vec<Task> {
                     _ => {}
                 }
                 let task = Task::new(summary, description, uid);
-                result.push(task);
+                result.insert(0, task);
             }
         }
 
@@ -103,9 +106,8 @@ pub fn main() {
         r_index: right.len(),
         left,
         right,
+        tasks,
     };
-
-
     
     AppLauncher::with_window(main_window)
         .log_to_console()
@@ -113,7 +115,7 @@ pub fn main() {
         .expect("launch failed");
 }
 
-fn ui_builder(tasks: &Vec<Task>) -> impl Widget<AppData> {
+fn ui_builder(tasks: &Vector<Task>) -> impl Widget<AppData> {
     let mut root = Flex::column();
 
     // Build a button to add children to both lists
