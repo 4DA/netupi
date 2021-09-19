@@ -29,6 +29,12 @@ extern crate ical;
 use std::io::BufReader;
 use std::fs::File;
 
+use std::any::type_name;
+
+fn type_of<T>(_: T) -> &'static str {
+    type_name::<T>()
+}
+
 #[derive(Clone, Data, Lens)]
 struct AppData {
     left: Vector<u32>,
@@ -37,19 +43,57 @@ struct AppData {
     r_index: usize,
 }
 
-pub fn parse_ical() {
+#[derive(Debug)]
+struct Task {
+    name: String,
+    description: Option<String>,
+    uid: String,
+}
+
+impl Task {
+    fn new(name: String, description: Option<String>, uid: String) -> Task {
+        return Task{name: name, description: description, uid: uid};
+    }
+}
+
+fn parse_ical() -> Vec<Task> {
     let buf = BufReader::new(File::open("/home/dc/Tasks.ics")
         .unwrap());
 
     let reader = ical::IcalParser::new(buf);
 
+    let mut result = Vec::new();
+
     for line in reader {
-        println!("{:?}", line);
+        let ical = line.unwrap();
+        for todo in ical.todos {
+            // println!("{}", type_of(&todo.properties));
+            for property in &todo.properties {
+                // println!("{}", property);
+                // println!("{}", type_of(&property));
+                let mut summary = String::new();
+                let mut description = None;
+                let mut uid = String::new();
+
+                match property.name.as_ref() {
+                    "SUMMARY" => {summary = property.value.as_ref().unwrap().clone();}
+                    "DESCRIPTION" => {description = property.value.clone();}
+                    "UID" => {uid = property.value.as_ref().unwrap().clone();}
+                    _ => {}
+                }
+                let task = Task::new(summary, description, uid);
+                result.push(task);
+            }
+        }
+
     }
+
+    return result;
 }
 
 pub fn main() {
-    let main_window = WindowDesc::new(ui_builder())
+    let tasks = parse_ical();
+    let main_window = WindowDesc::new(ui_builder(&tasks))
         .title(LocalizedString::new("list-demo-window-title").with_placeholder("List Demo"));
     // Set our initial data
     let left = vector![1, 2];
@@ -61,7 +105,7 @@ pub fn main() {
         right,
     };
 
-    parse_ical();
+
     
     AppLauncher::with_window(main_window)
         .log_to_console()
@@ -69,7 +113,7 @@ pub fn main() {
         .expect("launch failed");
 }
 
-fn ui_builder() -> impl Widget<AppData> {
+fn ui_builder(tasks: &Vec<Task>) -> impl Widget<AppData> {
     let mut root = Flex::column();
 
     // Build a button to add children to both lists
