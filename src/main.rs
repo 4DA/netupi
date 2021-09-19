@@ -25,6 +25,7 @@ use druid::{
 };
 
 extern crate ical;
+use ical::generator;
 
 use std::io::BufReader;
 use std::fs::File;
@@ -32,6 +33,8 @@ use std::fs::File;
 use std::any::type_name;
 
 use std::rc::Rc;
+use crate::ical::{generator::*, *};
+use std::fs;
 
 fn type_of<T>(_: T) -> &'static str {
     type_name::<T>()
@@ -92,8 +95,18 @@ fn parse_ical() -> Vector<Task> {
     return result;
 }
 
+fn re_emit() {
+    let filename = "/home/dc/Tasks.ics";
+
+    let input = BufReader::new(File::open(filename).unwrap());
+    let mut reader = ical::IcalParser::new(input);
+    let generated = reader.next().unwrap().ok().unwrap().generate();
+    fs::write("/home/dc/Tasks-generated.ics", generated).expect("Unable to write Tasks-generated.ics");
+}
+
 pub fn main() {
     let tasks = parse_ical();
+    re_emit();
     let main_window = WindowDesc::new(ui_builder())
         .title(LocalizedString::new("list-demo-window-title").with_placeholder("List Demo"));
 

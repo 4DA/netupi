@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 druid = { git = "https://github.com/linebender/druid.git", features=['im']}
 # ical = "0.6.*"
-ical = { git = "https://github.com/migmedia/ical-rs", featues=["ical", "generator"] }
+ical = { git = "https://github.com/migmedia/ical-rs", features=['ical', 'generator'] }
 
 # [dependencies.ical]
 # version = "0.6.*"
