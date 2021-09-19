@@ -50,11 +50,13 @@ struct Task {
     name: String,
     description: Option<String>,
     uid: String,
+    categories: Vector<String>
 }
 
 impl Task {
-    fn new(name: String, description: Option<String>, uid: String) -> Task {
-        return Task{name: name, description: description, uid: uid};
+    fn new(name: String, description: Option<String>,
+           uid: String, categories: Vector<String>) -> Task {
+        return Task{name: name, description: description, uid: uid, categories: categories};
     }
 }
 
@@ -73,20 +75,25 @@ fn parse_ical() -> Vector<Task> {
             let mut summary = String::new();
             let mut description = None;
             let mut uid = String::new();
+            let mut categories = Vector::new();
 
             for property in &todo.properties {
                 // println!("{}", property);
                 // println!("{}", type_of(&property));
 
                 match property.name.as_ref() {
+                    "UID" => {uid = property.value.as_ref().unwrap().clone();}
                     "SUMMARY" => {summary = property.value.as_ref().unwrap().clone();}
                     "DESCRIPTION" => {description = property.value.clone();}
-                    "UID" => {uid = property.value.as_ref().unwrap().clone();}
+                    "CATEGORIES" => {
+                        if (property.value.is_some()) {
+                            categories.insert(0,  property.value.as_ref().unwrap().clone())}
+                    }
                     _ => {}
                 }
             }
             
-            let task = Task::new(summary, description, uid);
+            let task = Task::new(summary, description, uid, categories);
             // println!("{:?}", task);
             result.insert(0, task);
         }
@@ -145,7 +152,7 @@ fn ui_builder() -> impl Widget<AppData> {
                     .with_child(
                         Label::new(|(tasks, item): &(Vector<Task>, u32), _env: &_| {
                             let id = *item as usize;
-                            format!("{} | {:?}", tasks[id].name, tasks[id].description)
+                            format!("{} | {:?} | {:?}", tasks[id].name, tasks[id].description, tasks[id].categories)
                         })
                         .align_vertical(UnitPoint::LEFT),
                     )
