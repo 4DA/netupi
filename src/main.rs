@@ -41,10 +41,11 @@ fn type_of<T>(_: T) -> &'static str {
 }
 
 #[derive(Clone, Data, Lens)]
-struct AppData {
+struct AppModel {
     tasks: Vector<Task>,
     tags: Vector<String>,
-    focus: Vector<String>
+    focus: Vector<String>,
+    cal: Rc<IcalCalendar>
 }
 
 #[derive(Debug, Clone, Data)]
@@ -64,60 +65,59 @@ impl Task {
     }
 }
 
-fn parse_ical() -> AppData {
+fn parse_ical() -> AppModel {
     let buf = BufReader::new(File::open("/home/dc/Tasks.ics")
         .unwrap());
 
-    let reader = ical::IcalParser::new(buf);
+    let mut reader = ical::IcalParser::new(buf);
 
     let mut tasks = Vector::new();
     let mut tags = OrdSet::new();
 
-    for line in reader {
-        let ical = line.unwrap();
-        for todo in ical.todos {
-            // println!("{}", type_of(&todo.properties));
-            let mut summary = String::new();
-            let mut description = None;
-            let mut uid = String::new();
-            let mut categories = Vector::new();
-            let mut priority = 0;
-            let mut status = None;
+    let ical = Rc::new(reader.next().unwrap().unwrap());
+    for todo in &ical.todos {
+        // println!("{}", type_of(&todo.properties));
+        let mut summary = String::new();
+        let mut description = None;
+        let mut uid = String::new();
+        let mut categories = Vector::new();
+        let mut priority = 0;
+        let mut status = None;
 
-            for property in &todo.properties {
-                // println!("{}", property);
-                // println!("{}", type_of(&property));
+        for property in &todo.properties {
+            // println!("{}", property);
+            // println!("{}", type_of(&property));
 
-                match property.name.as_ref() {
-                    "UID" => {uid = property.value.as_ref().unwrap().clone();}
-                    "SUMMARY" => {summary = property.value.as_ref().unwrap().clone();}
-                    "DESCRIPTION" => {description = property.value.clone();}
-                    "CATEGORIES" => {
-                        if (property.value.is_some()) {
-                            categories.insert(0,  property.value.as_ref().unwrap().clone());
-                            tags.insert(property.value.as_ref().unwrap().clone());
-                        }
+            match property.name.as_ref() {
+                "UID" => {uid = property.value.as_ref().unwrap().clone();}
+                "SUMMARY" => {summary = property.value.as_ref().unwrap().clone();}
+                "DESCRIPTION" => {description = property.value.clone();}
+                "CATEGORIES" => {
+                    if (property.value.is_some()) {
+                        categories.insert(0,  property.value.as_ref().unwrap().clone());
+                        tags.insert(property.value.as_ref().unwrap().clone());
                     }
-                    "STATUS" => {status = property.value.clone();}
-                    "PRIORITY" => {
-                        if (property.value.is_some()) {
-                            priority = property.value.as_ref().unwrap().parse::<u32>().unwrap();
-                        }
-                    }
-                    _ => {}
                 }
+                "STATUS" => {status = property.value.clone();}
+                "PRIORITY" => {
+                    if (property.value.is_some()) {
+                        priority = property.value.as_ref().unwrap().parse::<u32>().unwrap();
+                    }
+                }
+                _ => {}
             }
-            
-            let task = Task::new(summary, description, uid, categories, priority, status);
-            // println!("{:?}", task);
-            tasks.insert(0, task);
         }
+
+        let task = Task::new(summary, description, uid, categories, priority, status);
+        // println!("{:?}", task);
+        tasks.insert(0, task);
     }
+
 
     // let tags = vector![String::from("computer"), String::from("outside")];
     let focus = vector![String::from("todo"), String::from("active"), String::from("done"), String::from("all") ];
 
-        return AppData{tasks, tags: tags.iter().map(|x : &String| {x.clone()}).collect(), focus};
+        return AppModel{tasks, tags: tags.iter().map(|x : &String| {x.clone()}).collect(), focus, cal: ical};
 }
 
 fn re_emit() {
@@ -142,7 +142,11 @@ pub fn main() {
         .expect("launch failed");
 }
 
-fn ui_builder() -> impl Widget<AppData> {
+fn start_tracking(data: &mut AppModel, id: u32) {
+    
+}
+
+fn ui_builder() -> impl Widget<AppModel> {
     let mut root = Flex::column();
 
     let mut lists = Flex::row().cross_axis_alignment(CrossAxisAlignment::Start);
@@ -163,7 +167,7 @@ fn ui_builder() -> impl Widget<AppData> {
                 .background(Color::rgb(0.5, 0.5, 0.5))
         }))
         .vertical()
-        .lens(AppData::focus)
+        .lens(AppModel::focus)
     );
 
     left_bar.add_default_spacer();
@@ -180,7 +184,7 @@ fn ui_builder() -> impl Widget<AppData> {
                 .background(Color::rgb(0.5, 0.5, 0.5))
         }))
         .vertical()
-        .lens(AppData::tags),
+        .lens(AppModel::tags),
         1.0,
     );
 
@@ -208,6 +212,7 @@ fn ui_builder() -> impl Widget<AppData> {
                                 // We have access to both child's data and shared data.
                                 // Remove element from right list.
                                 // shared.retain(|v| v != item);
+                                // start_tracking(shared, *item);
                             })
                             .fix_size(120.0, 20.0)
                             .align_vertical(UnitPoint::CENTER),
@@ -221,9 +226,9 @@ fn ui_builder() -> impl Widget<AppData> {
         .vertical()
         .lens(lens::Identity.map(
             // Expose shared data with children data
-            |d: &AppData| (d.tasks.clone(), (0 .. d.tasks.len() as u32).collect()),
-            |d: &mut AppData, x: (Vector<Task>, Vector<u32>)| {
-                // If shared data was changed reflect the changes in our AppData
+            |d: &AppModel| (d.tasks.clone(), (0 .. d.tasks.len() as u32).collect()),
+            |d: &mut AppModel, x: (Vector<Task>, Vector<u32>)| {
+                // If shared data was changed reflect the changes in our AppModel
                 d.tasks = x.0
             },
         )),
