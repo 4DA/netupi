@@ -36,17 +36,29 @@ use std::rc::Rc;
 use crate::ical::{generator::*, *};
 use std::fs;
 
+use std::time::Instant;
+
 fn type_of<T>(_: T) -> &'static str {
     type_name::<T>()
 }
+
+#[derive(Debug, Clone, Data)]
+struct TrackingState {
+    active: bool,
+    task_id: u32,
+    timestamp: Instant
+}
+
 
 #[derive(Clone, Data, Lens)]
 struct AppModel {
     tasks: Vector<Task>,
     tags: Vector<String>,
     focus: Vector<String>,
-    cal: Rc<IcalCalendar>
+    cal: Rc<IcalCalendar>,
+    tracking: TrackingState
 }
+
 
 #[derive(Debug, Clone, Data)]
 struct Task {
@@ -117,7 +129,13 @@ fn parse_ical() -> AppModel {
     // let tags = vector![String::from("computer"), String::from("outside")];
     let focus = vector![String::from("todo"), String::from("active"), String::from("done"), String::from("all") ];
 
-        return AppModel{tasks, tags: tags.iter().map(|x : &String| {x.clone()}).collect(), focus, cal: ical};
+    return AppModel{
+        tasks,
+        tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
+        focus,
+        cal: ical,
+        tracking: TrackingState{active: false, task_id: 0, timestamp: Instant::now()}
+    };
 }
 
 fn re_emit() {
@@ -143,7 +161,9 @@ pub fn main() {
 }
 
 fn start_tracking(data: &mut AppModel, id: u32) {
-    
+    data.tracking.active = true;
+    data.tracking.timestamp = Instant::now();
+    println!("started tracking");
 }
 
 fn ui_builder() -> impl Widget<AppModel> {
@@ -197,22 +217,22 @@ fn ui_builder() -> impl Widget<AppModel> {
             List::new(|| {
                 Flex::row()
                     .with_child(
-                        Label::new(|(tasks, item): &(Vector<Task>, u32), _env: &_| {
+                        Label::new(|(d, item): &(AppModel, u32), _env: &_| {
                             let id = *item as usize;
                             format!("{} | dsc: {:?} | cats: {:?} | pri: {} | sta: {:?}",
-                                    tasks[id].name, tasks[id].description, tasks[id].categories,
-                                    tasks[id].priority, tasks[id].status)
+                                    d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
+                                    d.tasks[id].priority, d.tasks[id].status)
                         })
                         .align_vertical(UnitPoint::LEFT),
                     )
                     .with_flex_spacer(1.0)
                     .with_child(
                         Button::new("Start tracking")
-                            .on_click(|_ctx, (shared, item): &mut (Vector<Task>, u32), _env| {
+                            .on_click(|_ctx, (shared, item): &mut (AppModel, u32), _env| {
                                 // We have access to both child's data and shared data.
                                 // Remove element from right list.
                                 // shared.retain(|v| v != item);
-                                // start_tracking(shared, *item);
+                                start_tracking(shared, *item);
                             })
                             .fix_size(120.0, 20.0)
                             .align_vertical(UnitPoint::CENTER),
@@ -226,10 +246,10 @@ fn ui_builder() -> impl Widget<AppModel> {
         .vertical()
         .lens(lens::Identity.map(
             // Expose shared data with children data
-            |d: &AppModel| (d.tasks.clone(), (0 .. d.tasks.len() as u32).collect()),
-            |d: &mut AppModel, x: (Vector<Task>, Vector<u32>)| {
+            |d: &AppModel| (d.clone(), (0 .. d.tasks.len() as u32).collect()),
+            |d: &mut AppModel, x: (AppModel, Vector<u32>)| {
                 // If shared data was changed reflect the changes in our AppModel
-                d.tasks = x.0
+                *d = x.0
             },
         )),
         1.0,
@@ -237,7 +257,13 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     root.add_flex_child(lists, 1.0);
 
-    root.with_child(Label::new("Current: LADR 15m/30m | Today: 2h | Week: 12h")
-                    .align_horizontal(UnitPoint::RIGHT))
+    root.with_child(Label::new(|d: &AppModel, _env: &_| {
+        if (d.tracking.active) {
+            format!("Elapsed: {:?}", Instant::now().duration_since(d.tracking.timestamp))
+        }
+        else {
+            String::from("Inactive")
+        }
+    }).align_horizontal(UnitPoint::RIGHT))
 }
 
