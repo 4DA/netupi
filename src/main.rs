@@ -49,6 +49,11 @@ struct TrackingState {
     timestamp: Instant
 }
 
+#[derive(Clone, Data)]
+struct ViewState {
+    filterByTag: String,
+    filterByRelevance: String
+}
 
 #[derive(Clone, Data, Lens)]
 struct AppModel {
@@ -56,7 +61,8 @@ struct AppModel {
     tags: Vector<String>,
     focus: Vector<String>,
     cal: Rc<IcalCalendar>,
-    tracking: TrackingState
+    tracking: TrackingState,
+    view: ViewState
 }
 
 
@@ -67,17 +73,28 @@ struct Task {
     uid: String,
     categories: Vector<String>,
     priority: u32,
-    status: Option<String>
+    status: Option<String>,
+    seq: u32,
+    timestamps: Vector<String>
 }
 
 impl Task {
     fn new(name: String, description: Option<String>,
-           uid: String, categories: Vector<String>, priority: u32, status: Option<String>) -> Task {
-        return Task{name, description, uid, categories, priority, status};
+           uid: String, categories: Vector<String>,
+           priority: u32, status: Option<String>, seq: u32,
+           timestamps: Vector<String>) -> Task {
+        return Task{name, description, uid, categories, priority, status, seq, timestamps};
     }
 }
 
-fn parse_ical() -> AppModel {
+fn convert_ts(optstr: Option<String>) -> Vector<String> {
+    match optstr {
+        Some(st) => vector![st],
+        None => Vector::new(),
+    }
+}
+
+fn parse_ical() -> (Rc<IcalCalendar>, Vector<Task>, OrdSet<String>) {
     let buf = BufReader::new(File::open("/home/dc/Tasks.ics")
         .unwrap());
 
@@ -95,6 +112,8 @@ fn parse_ical() -> AppModel {
         let mut categories = Vector::new();
         let mut priority = 0;
         let mut status = None;
+        let mut seq = 0;
+        let mut timestamps = Vector::new();
 
         for property in &todo.properties {
             // println!("{}", property);
@@ -116,26 +135,30 @@ fn parse_ical() -> AppModel {
                         priority = property.value.as_ref().unwrap().parse::<u32>().unwrap();
                     }
                 }
+                "SEQUENCE" => {
+                    if (property.value.is_some()) {
+                        seq = property.value.as_ref().unwrap().parse::<u32>().unwrap();
+                    }
+                },
+                "TIMESTAMPS" => {
+                    if (property.value.is_some()) {
+                        timestamps =
+                            convert_ts(property.value.clone());
+                    }
+                }
                 _ => {}
             }
         }
 
-        let task = Task::new(summary, description, uid, categories, priority, status);
+        let task = Task::new(summary, description, uid, categories, priority, status, seq, timestamps);
         // println!("{:?}", task);
         tasks.insert(0, task);
     }
 
 
     // let tags = vector![String::from("computer"), String::from("outside")];
-    let focus = vector![String::from("todo"), String::from("active"), String::from("done"), String::from("all") ];
 
-    return AppModel{
-        tasks,
-        tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
-        focus,
-        cal: ical,
-        tracking: TrackingState{active: false, task_id: 0, timestamp: Instant::now()}
-    };
+    return (ical, tasks, tags);
 }
 
 fn re_emit() {
@@ -148,8 +171,21 @@ fn re_emit() {
 }
 
 pub fn main() {
+    let focus = vector![String::from("todo"), String::from("active"), String::from("done"), String::from("all") ];
 
-    let data = parse_ical();
+
+    let (ical, tasks, tags) = parse_ical();
+
+    let data = AppModel{
+        tasks,
+        tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
+        focus,
+        cal: ical,
+        tracking: TrackingState{active: false, task_id: 0, timestamp: Instant::now()},
+        view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")}
+    };
+
+    
     re_emit();
     let main_window = WindowDesc::new(ui_builder())
         .title(LocalizedString::new("list-demo-window-title").with_placeholder("List Demo"));
@@ -169,15 +205,15 @@ fn start_tracking(data: &mut AppModel, id: u32) {
 fn ui_builder() -> impl Widget<AppModel> {
     let mut root = Flex::column();
 
-    let mut lists = Flex::row().cross_axis_alignment(CrossAxisAlignment::Start);
-    let mut left_bar = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
+    let mut main_row = Flex::row().cross_axis_alignment(CrossAxisAlignment::Start);
+    let mut focus_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
 
-    left_bar.add_default_spacer();
-    left_bar.add_flex_child(Label::new("Focus"), 1.0);
-    left_bar.add_default_spacer();
+    focus_column.add_default_spacer();
+    focus_column.add_flex_child(Label::new("Focus"), 1.0);
+    focus_column.add_default_spacer();
 
-    left_bar.add_child(
+    focus_column.add_child(
         Scroll::new(List::new(|| {
             Label::new(|item: &String, _env: &_| format!("{}", item))
                 .align_vertical(UnitPoint::LEFT)
@@ -190,11 +226,11 @@ fn ui_builder() -> impl Widget<AppModel> {
         .lens(AppModel::focus)
     );
 
-    left_bar.add_default_spacer();
-    left_bar.add_child(Label::new("Tags"));
-    left_bar.add_default_spacer();
+    focus_column.add_default_spacer();
+    focus_column.add_child(Label::new("Tags"));
+    focus_column.add_default_spacer();
 
-    left_bar.add_flex_child(
+    focus_column.add_flex_child(
         Scroll::new(List::new(|| {
             Label::new(|item: &String, _env: &_| format!("{}", item))
                 .align_vertical(UnitPoint::LEFT)
@@ -208,20 +244,20 @@ fn ui_builder() -> impl Widget<AppModel> {
         1.0,
     );
 
-    lists.add_flex_child(left_bar, 0.5);
+    main_row.add_flex_child(focus_column, 0.5);
 
 
     // Build a list with shared data
-    lists.add_flex_child(
+    main_row.add_flex_child(
         Scroll::new(
             List::new(|| {
                 Flex::row()
                     .with_child(
                         Label::new(|(d, item): &(AppModel, u32), _env: &_| {
                             let id = *item as usize;
-                            format!("{} | dsc: {:?} | cats: {:?} | pri: {} | sta: {:?}",
+                            format!("{} | dsc: {:?} | cats: {:?} | pri: {} | sta: {:?} | seq: {}",
                                     d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
-                                    d.tasks[id].priority, d.tasks[id].status)
+                                    d.tasks[id].priority, d.tasks[id].status, d.tasks[id].seq)
                         })
                         .align_vertical(UnitPoint::LEFT),
                     )
@@ -255,7 +291,7 @@ fn ui_builder() -> impl Widget<AppModel> {
         1.0,
     );
 
-    root.add_flex_child(lists, 1.0);
+    root.add_flex_child(main_row, 1.0);
 
     root.with_child(Label::new(|d: &AppModel, _env: &_| {
         if (d.tracking.active) {
