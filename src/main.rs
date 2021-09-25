@@ -16,7 +16,7 @@
 // On Windows platform, don't show a console when opening the app.
 #![windows_subsystem = "windows"]
 
-use druid::im::{vector, Vector, ordset, OrdSet, OrdMap};
+use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
 use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll};
 use druid::{
@@ -37,19 +37,21 @@ use std::any::type_name;
 use std::rc::Rc;
 use std::fs;
 use std::time::Instant;
-use std::collections::HashMap;
+
 
 fn type_of<T>(_: T) -> &'static str {
     type_name::<T>()
 }
 
+type PropertyMap = HashMap<String, Rc<Property>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Data)]
 struct TrackerTodo {
-    properties: HashMap<String, Property>,
-    alarms: Vec<IcalAlarm>
+    properties: PropertyMap,
+    alarms: Vector<Rc<IcalAlarm>>
 }
 
+type TodoMap = HashMap<String, TrackerTodo>;
 
 #[derive(Debug, Clone, Data)]
 struct TrackingState {
@@ -64,14 +66,15 @@ struct ViewState {
     filterByRelevance: String
 }
 
-type TodoMap = HashMap<String, TrackerTodo>;
+
+
 
 #[derive(Clone, Data, Lens)]
 struct AppModel {
     tasks: Vector<Task>,
     tags: Vector<String>,
     focus: Vector<String>,
-    todos: Rc<TodoMap>,
+    todos: TodoMap,
     cal: Rc<IcalCalendar>,
     tracking: TrackingState,
     view: ViewState
@@ -106,11 +109,11 @@ fn convert_ts(optstr: Option<String>) -> Vector<String> {
     }
 }
 
-fn props_by_name(prop_vec: &Vec<Property>) -> HashMap<String, Property> {
-    let mut result = HashMap::<String, Property>::new();
+fn props_by_name(prop_vec: &Vec<Property>) -> PropertyMap {
+    let mut result = PropertyMap::new();
 
     for p in prop_vec {
-        result.insert(p.name.clone(), p.clone());
+        result.insert(p.name.clone(), Rc::new(p.clone()));
     }
 
     return result;
@@ -123,7 +126,7 @@ fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> TodoMap {
         let properties = props_by_name(&task.properties);
 
         result.insert(properties.get("UID").unwrap().value.clone().unwrap(),
-                      TrackerTodo{properties, alarms: task.alarms.clone()});
+                      TrackerTodo{properties, alarms: Vector::new()});
     }
 
     return result;
@@ -223,7 +226,7 @@ pub fn main() {
         tasks,
         tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
         focus,
-        todos: Rc::new(todos),
+        todos: todos,
         cal: Rc::new(ical),
         tracking: TrackingState{active: false, task_id: 0, timestamp: Instant::now()},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")}
@@ -240,7 +243,7 @@ pub fn main() {
         .expect("launch failed");
 }
 
-fn start_tracking(data: &mut AppModel, id: u32) {
+fn start_tracking(data: &mut AppModel, uid: &String) {
     data.tracking.active = true;
     data.tracking.timestamp = Instant::now();
     println!("started tracking");
@@ -297,22 +300,23 @@ fn ui_builder() -> impl Widget<AppModel> {
             List::new(|| {
                 Flex::row()
                     .with_child(
-                        Label::new(|(d, item): &(AppModel, u32), _env: &_| {
-                            let id = *item as usize;
-                            format!("{} | dsc: {:?} | cats: {:?} | pri: {} | sta: {:?} | seq: {}",
-                                    d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
-                                    d.tasks[id].priority, d.tasks[id].status, d.tasks[id].seq)
+                        Label::new(|(d, uid): &(AppModel, String), _env: &_| {
+                            format!("{}", uid)
+                            // let id = *item as usize;
+                            // format!("{} | dsc: {:?} | cats: {:?} | pri: {} | sta: {:?} | seq: {}",
+                            //         d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
+                            //         d.tasks[id].priority, d.tasks[id].status, d.tasks[id].seq)
                         })
                         .align_vertical(UnitPoint::LEFT),
                     )
                     .with_flex_spacer(1.0)
                     .with_child(
                         Button::new("Start tracking")
-                            .on_click(|_ctx, (shared, item): &mut (AppModel, u32), _env| {
+                            .on_click(|_ctx, (shared, item): &mut (AppModel, String), _env| {
                                 // We have access to both child's data and shared data.
                                 // Remove element from right list.
                                 // shared.retain(|v| v != item);
-                                start_tracking(shared, *item);
+                                start_tracking(shared, &item);
                             })
                             .fix_size(120.0, 20.0)
                             .align_vertical(UnitPoint::CENTER),
@@ -326,8 +330,8 @@ fn ui_builder() -> impl Widget<AppModel> {
         .vertical()
         .lens(lens::Identity.map(
             // Expose shared data with children data
-            |d: &AppModel| (d.clone(), (0 .. d.tasks.len() as u32).collect()),
-            |d: &mut AppModel, x: (AppModel, Vector<u32>)| {
+            |d: &AppModel| (d.clone(), d.todos.keys().cloned().collect()),
+            |d: &mut AppModel, x: (AppModel, Vector<String>)| {
                 // If shared data was changed reflect the changes in our AppModel
                 *d = x.0
             },
