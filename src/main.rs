@@ -56,7 +56,7 @@ type TodoMap = HashMap<String, TrackerTodo>;
 #[derive(Debug, Clone, Data)]
 struct TrackingState {
     active: bool,
-    task_id: u32,
+    task_uid: String,
     timestamp: Instant
 }
 
@@ -228,14 +228,14 @@ pub fn main() {
         focus,
         todos: todos,
         cal: Rc::new(ical),
-        tracking: TrackingState{active: false, task_id: 0, timestamp: Instant::now()},
+        tracking: TrackingState{active: false, task_uid: "".to_string(), timestamp: Instant::now()},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")}
     };
 
     
     re_emit();
     let main_window = WindowDesc::new(ui_builder())
-        .title(LocalizedString::new("list-demo-window-title").with_placeholder("List Demo"));
+        .title(LocalizedString::new("time-tracker-window-title").with_placeholder("Time tracker"));
     
     AppLauncher::with_window(main_window)
         .log_to_console()
@@ -246,7 +246,14 @@ pub fn main() {
 fn start_tracking(data: &mut AppModel, uid: &String) {
     data.tracking.active = true;
     data.tracking.timestamp = Instant::now();
+    data.tracking.task_uid = uid.clone();
     println!("started tracking");
+}
+
+fn stop_tracking(data: &mut AppModel, uid: &String) {
+    data.tracking.active = false;
+    let elapsed = Instant::now() - data.tracking.timestamp;
+    println!("stopped tracking, elapsed: {:?}", elapsed);
 }
 
 fn ui_builder() -> impl Widget<AppModel> {
@@ -317,6 +324,17 @@ fn ui_builder() -> impl Widget<AppModel> {
                                 // Remove element from right list.
                                 // shared.retain(|v| v != item);
                                 start_tracking(shared, &item);
+                            })
+                            .fix_size(120.0, 20.0)
+                            .align_vertical(UnitPoint::CENTER),
+                    )
+                    .with_child(
+                        Button::new("Stop tracking")
+                            .on_click(|_ctx, (shared, item): &mut (AppModel, String), _env| {
+                                // We have access to both child's data and shared data.
+                                // Remove element from right list.
+                                // shared.retain(|v| v != item);
+                                stop_tracking(shared, &item);
                             })
                             .fix_size(120.0, 20.0)
                             .align_vertical(UnitPoint::CENTER),
