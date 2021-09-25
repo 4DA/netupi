@@ -64,11 +64,14 @@ struct ViewState {
     filterByRelevance: String
 }
 
+type TodoMap = HashMap<String, TrackerTodo>;
+
 #[derive(Clone, Data, Lens)]
 struct AppModel {
     tasks: Vector<Task>,
     tags: Vector<String>,
     focus: Vector<String>,
+    todos: Rc<TodoMap>,
     cal: Rc<IcalCalendar>,
     tracking: TrackingState,
     view: ViewState
@@ -113,8 +116,8 @@ fn props_by_name(prop_vec: &Vec<Property>) -> HashMap<String, Property> {
     return result;
 }
 
-fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> HashMap<String, TrackerTodo> {
-    let mut result = HashMap::<String, TrackerTodo>::new();
+fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> TodoMap {
+    let mut result = TodoMap::new();
 
     for task in todo_vec {
         let properties = props_by_name(&task.properties);
@@ -126,7 +129,7 @@ fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> HashMap<String, TrackerTodo> {
     return result;
 }
 
-fn parse_ical() -> (Rc<IcalCalendar>, Vector<Task>, OrdSet<String>) {
+fn parse_ical() -> (TodoMap, IcalCalendar, Vector<Task>, OrdSet<String>) {
     let buf = BufReader::new(File::open("/home/dc/Tasks.ics")
         .unwrap());
 
@@ -135,7 +138,7 @@ fn parse_ical() -> (Rc<IcalCalendar>, Vector<Task>, OrdSet<String>) {
     let mut tasks = Vector::new();
     let mut tags = OrdSet::new();
 
-    let ical = Rc::new(reader.next().unwrap().unwrap());
+    let ical = reader.next().unwrap().unwrap();
 
     let tracker_todos = todos_by_uid(&ical.todos);
     println!("todos: {:?}", tracker_todos);
@@ -194,7 +197,11 @@ fn parse_ical() -> (Rc<IcalCalendar>, Vector<Task>, OrdSet<String>) {
 
     // let tags = vector![String::from("computer"), String::from("outside")];
 
-    return (ical, tasks, tags);
+    return (tracker_todos, ical, tasks, tags);
+}
+
+fn update_ical(ical: &mut IcalCalendar, todo_map: &TodoMap) {
+
 }
 
 fn re_emit() {
@@ -210,13 +217,14 @@ pub fn main() {
     let focus = vector![String::from("todo"), String::from("active"), String::from("done"), String::from("all") ];
 
 
-    let (ical, tasks, tags) = parse_ical();
+    let (todos, ical, tasks, tags) = parse_ical();
 
     let data = AppModel{
         tasks,
         tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
         focus,
-        cal: ical,
+        todos: Rc::new(todos),
+        cal: Rc::new(ical),
         tracking: TrackingState{active: false, task_id: 0, timestamp: Instant::now()},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")}
     };
