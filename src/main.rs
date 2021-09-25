@@ -46,7 +46,7 @@ fn type_of<T>(_: T) -> &'static str {
 
 #[derive(Debug, Clone)]
 struct TrackerTodo {
-    props: HashMap<String, Property>,
+    properties: HashMap<String, Property>,
     alarms: Vec<IcalAlarm>
 }
 
@@ -117,10 +117,10 @@ fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> HashMap<String, TrackerTodo> {
     let mut result = HashMap::<String, TrackerTodo>::new();
 
     for task in todo_vec {
-        let props = props_by_name(&task.properties);
+        let properties = props_by_name(&task.properties);
 
-        result.insert(props.get("UID").unwrap().value.clone().unwrap(),
-                      TrackerTodo{props, alarms: task.alarms.clone()});
+        result.insert(properties.get("UID").unwrap().value.clone().unwrap(),
+                      TrackerTodo{properties, alarms: task.alarms.clone()});
     }
 
     return result;
@@ -140,7 +140,7 @@ fn parse_ical() -> (Rc<IcalCalendar>, Vector<Task>, OrdSet<String>) {
     let tracker_todos = todos_by_uid(&ical.todos);
     println!("todos: {:?}", tracker_todos);
 
-    for todo in &ical.todos {
+    for (uid, todo) in &tracker_todos {
         // println!("{}", type_of(&todo.properties));
         let mut summary = String::new();
         let mut description = None;
@@ -151,11 +151,11 @@ fn parse_ical() -> (Rc<IcalCalendar>, Vector<Task>, OrdSet<String>) {
         let mut seq = 0;
         let mut timestamps = Vector::new();
 
-        for property in &todo.properties {
+        for (name, property) in &todo.properties {
             // println!("{}", property);
             // println!("{}", type_of(&property));
 
-            match property.name.as_ref() {
+            match name.as_ref() {
                 "UID" => {uid = property.value.as_ref().unwrap().clone();}
                 "SUMMARY" => {summary = property.value.as_ref().unwrap().clone();}
                 "DESCRIPTION" => {description = property.value.clone();}
