@@ -12,35 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Demos basic list widget and list manipulations.
-
+// druid stuff
 // On Windows platform, don't show a console when opening the app.
 #![windows_subsystem = "windows"]
 
-use druid::im::{vector, Vector, ordset, OrdSet};
+use druid::im::{vector, Vector, ordset, OrdSet, OrdMap};
 use druid::lens::{self, LensExt};
 use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll};
 use druid::{
     AppLauncher, Color, Data, Lens, LocalizedString, UnitPoint, Widget, WidgetExt, WindowDesc,
 };
 
+// ical stuff
 extern crate ical;
 use ical::generator;
+use crate::ical::{generator::*, *, parser::*};
+use ical::parser::ical::component::IcalTodo;
+use ical::parser::ical::component::IcalAlarm;
 
+// std stuff
 use std::io::BufReader;
 use std::fs::File;
-
 use std::any::type_name;
-
 use std::rc::Rc;
-use crate::ical::{generator::*, *};
 use std::fs;
-
 use std::time::Instant;
+use std::collections::HashMap;
 
 fn type_of<T>(_: T) -> &'static str {
     type_name::<T>()
 }
+
+
+#[derive(Debug, Clone)]
+struct TrackerTodo {
+    props: HashMap<String, Property>,
+    alarms: Vec<IcalAlarm>
+}
+
 
 #[derive(Debug, Clone, Data)]
 struct TrackingState {
@@ -94,6 +103,29 @@ fn convert_ts(optstr: Option<String>) -> Vector<String> {
     }
 }
 
+fn props_by_name(prop_vec: &Vec<Property>) -> HashMap<String, Property> {
+    let mut result = HashMap::<String, Property>::new();
+
+    for p in prop_vec {
+        result.insert(p.name.clone(), p.clone());
+    }
+
+    return result;
+}
+
+fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> HashMap<String, TrackerTodo> {
+    let mut result = HashMap::<String, TrackerTodo>::new();
+
+    for task in todo_vec {
+        let props = props_by_name(&task.properties);
+
+        result.insert(props.get("UID").unwrap().value.clone().unwrap(),
+                      TrackerTodo{props, alarms: task.alarms.clone()});
+    }
+
+    return result;
+}
+
 fn parse_ical() -> (Rc<IcalCalendar>, Vector<Task>, OrdSet<String>) {
     let buf = BufReader::new(File::open("/home/dc/Tasks.ics")
         .unwrap());
@@ -104,6 +136,10 @@ fn parse_ical() -> (Rc<IcalCalendar>, Vector<Task>, OrdSet<String>) {
     let mut tags = OrdSet::new();
 
     let ical = Rc::new(reader.next().unwrap().unwrap());
+
+    let tracker_todos = todos_by_uid(&ical.todos);
+    println!("todos: {:?}", tracker_todos);
+
     for todo in &ical.todos {
         // println!("{}", type_of(&todo.properties));
         let mut summary = String::new();
