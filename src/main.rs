@@ -203,16 +203,29 @@ fn parse_ical() -> (TodoMap, IcalCalendar, Vector<Task>, OrdSet<String>) {
     return (tracker_todos, ical, tasks, tags);
 }
 
-fn update_ical(ical: &mut IcalCalendar, todo_map: &TodoMap) {
+fn update_ical(src: & IcalCalendar, todo_map: &TodoMap) -> IcalCalendar {
+    let mut ical = src.clone();
 
+    ical.todos.clear();
+    for (uid, todo) in todo_map {
+        let mut ical_props = Vec::<Property>::new();
+        let mut ical_alarms = Vec::<IcalAlarm>::new();
+
+        for (name, task) in &todo.properties {
+            ical_props.insert(0, Property::clone(task));
+        }
+
+        for alarm in &todo.alarms {
+            ical_alarms.insert(0, IcalAlarm::clone(alarm));
+        }
+
+        ical.todos.insert(0, IcalTodo{properties: ical_props, alarms: ical_alarms});
+    }
+    return ical
 }
 
-fn re_emit() {
-    let filename = "/home/dc/Tasks.ics";
-
-    let input = BufReader::new(File::open(filename).unwrap());
-    let mut reader = ical::IcalParser::new(input);
-    let generated = reader.next().unwrap().ok().unwrap().generate();
+fn emit(cal: &IcalCalendar) {
+    let generated = cal.generate();
     fs::write("/home/dc/Tasks-generated.ics", generated).expect("Unable to write Tasks-generated.ics");
 }
 
@@ -232,8 +245,6 @@ pub fn main() {
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")}
     };
 
-    
-    re_emit();
     let main_window = WindowDesc::new(ui_builder())
         .title(LocalizedString::new("time-tracker-window-title").with_placeholder("Time tracker"));
     
@@ -358,6 +369,16 @@ fn ui_builder() -> impl Widget<AppModel> {
     );
 
     root.add_flex_child(main_row, 1.0);
+
+    root.add_child(
+        Button::new("Save")
+            .on_click(|_ctx, (model): &mut (AppModel), _env| {
+                let newcal = update_ical(&mut IcalCalendar::clone(&model.cal), &model.todos);
+                emit(&newcal);
+            })
+            .fix_size(120.0, 20.0)
+            .align_vertical(UnitPoint::CENTER),
+    );
 
     root.with_child(Label::new(|d: &AppModel, _env: &_| {
         if (d.tracking.active) {
