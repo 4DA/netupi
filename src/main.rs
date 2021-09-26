@@ -37,7 +37,20 @@ use std::any::type_name;
 use std::rc::Rc;
 use std::fs;
 use std::time::Instant;
+use std::time::SystemTime;
 
+// uid stuff
+use uuid::v1::{Timestamp, Context};
+use uuid::Uuid;
+
+fn generate_uid() -> String {
+
+    let context = Context::new(42);
+    let epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+    let ts = Timestamp::from_unix(&context, epoch.as_secs(), epoch.subsec_nanos());
+    let uuid = Uuid::new_v1(ts, &[1, 2, 3, 4, 5, 6]).expect("failed to generate UUID");
+    return uuid.to_string();
+}
 
 fn type_of<T>(_: T) -> &'static str {
     type_name::<T>()
@@ -65,9 +78,6 @@ struct ViewState {
     filterByTag: String,
     filterByRelevance: String
 }
-
-
-
 
 #[derive(Clone, Data, Lens)]
 struct AppModel {
@@ -319,7 +329,8 @@ fn ui_builder() -> impl Widget<AppModel> {
                 Flex::row()
                     .with_child(
                         Label::new(|(d, uid): &(AppModel, String), _env: &_| {
-                            format!("{}", uid)
+                            let summary = &d.todos.get(uid).unwrap().properties.get("SUMMARY").unwrap().value;
+                            format!("[{}] SUMMARY: {:?}", uid, summary)
                             // let id = *item as usize;
                             // format!("{} | dsc: {:?} | cats: {:?} | pri: {} | sta: {:?} | seq: {}",
                             //         d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
@@ -373,8 +384,32 @@ fn ui_builder() -> impl Widget<AppModel> {
     root.add_child(
         Button::new("Save")
             .on_click(|_ctx, (model): &mut (AppModel), _env| {
+                // todo dont clone IcalCalendar
                 let newcal = update_ical(&mut IcalCalendar::clone(&model.cal), &model.todos);
                 emit(&newcal);
+                model.cal = Rc::new(newcal)
+            })
+            .fix_size(120.0, 20.0)
+            .align_vertical(UnitPoint::CENTER),
+    );
+
+    root.add_child(
+        Button::new("Add")
+            .on_click(|_ctx, (model): &mut (AppModel), _env| {
+                let mut newtask = IcalTodo::new();
+                let uid = generate_uid();
+                assert_eq!(model.todos.contains_key(&uid), false, "VTODOs can't have duplicate UIDs");
+
+                let mut props = PropertyMap::new();
+                props.insert("UID".to_string(), Rc::new(ical_property!("UID", uid.clone())));
+                props.insert("SUMMARY".to_string(),
+                             Rc::new(ical_property!("SUMMARY", "this is new task")));                
+
+                model.todos.insert(uid.clone(),
+                                   TrackerTodo{properties: props,
+                                               alarms: Vector::new()});
+
+                println!("type = {:?}", type_of(newtask));
             })
             .fix_size(120.0, 20.0)
             .align_vertical(UnitPoint::CENTER),
