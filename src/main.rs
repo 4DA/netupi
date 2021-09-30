@@ -39,6 +39,8 @@ use std::fs;
 use std::time::Instant;
 use std::time::SystemTime;
 
+use std::env;
+
 // uid stuff
 use uuid::v1::{Timestamp, Context};
 use uuid::Uuid;
@@ -142,8 +144,8 @@ fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> TodoMap {
     return result;
 }
 
-fn parse_ical() -> (TodoMap, IcalCalendar, Vector<Task>, OrdSet<String>) {
-    let buf = BufReader::new(File::open("/home/dc/Tasks.ics")
+fn parse_ical(file_path: String) -> (TodoMap, IcalCalendar, Vector<Task>, OrdSet<String>) {
+    let buf = BufReader::new(File::open(file_path)
         .unwrap());
 
     let mut reader = ical::IcalParser::new(buf);
@@ -240,10 +242,20 @@ fn emit(cal: &IcalCalendar) {
 }
 
 pub fn main() {
+
+    let args: Vec<String> = env::args().collect();
+
+    let file_path = match args.len() {
+        // no arguments passed
+        1 => String::from("/home/dc/Tasks.ics"),
+        2 => args[1].clone(),
+        _ => args[1].clone(),
+    };
+
     let focus = vector![String::from("todo"), String::from("active"), String::from("done"), String::from("all") ];
 
 
-    let (todos, ical, tasks, tags) = parse_ical();
+    let (todos, ical, tasks, tags) = parse_ical(file_path);
 
     let data = AppModel{
         tasks,
