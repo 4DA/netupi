@@ -48,6 +48,8 @@ use uuid::Uuid;
 // chrono
 use chrono::prelude::*;
 
+type ImportResult<T> = std::result::Result<T, String>;
+
 fn generate_uid() -> String {
 
     let context = Context::new(42);
@@ -63,13 +65,7 @@ fn type_of<T>(_: T) -> &'static str {
 
 type PropertyMap = HashMap<String, Rc<Property>>;
 
-#[derive(Debug, Clone, Data)]
-struct TrackerTodo {
-    properties: PropertyMap,
-    alarms: Vector<Rc<IcalAlarm>>
-}
-
-type TodoMap = HashMap<String, TrackerTodo>;
+type TaskMap = HashMap<String, Task>;
 
 #[derive(Debug, Clone, Data)]
 struct TrackingState {
@@ -86,11 +82,9 @@ struct ViewState {
 
 #[derive(Clone, Data, Lens)]
 struct AppModel {
-    tasks: Vector<Task>,
+    tasks: TaskMap,
     tags: Vector<String>,
     focus: Vector<String>,
-    todos: TodoMap,
-    cal: Rc<IcalCalendar>,
     tracking: TrackingState,
     view: ViewState
 }
@@ -140,18 +134,18 @@ fn props_by_name(prop_vec: &Vec<Property>) -> PropertyMap {
     return result;
 }
 
-fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> TodoMap {
-    let mut result = TodoMap::new();
+// fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> TodoMap {
+//     let mut result = TodoMap::new();
 
-    for task in todo_vec {
-        let properties = props_by_name(&task.properties);
+//     for task in todo_vec {
+//         let properties = props_by_name(&task.properties);
 
-        result.insert(properties.get("UID").unwrap().value.clone().unwrap(),
-                      TrackerTodo{properties, alarms: Vector::new()});
-    }
+//         result.insert(properties.get("UID").unwrap().value.clone().unwrap(),
+//                       TrackerTodo{properties, alarms: Vector::new()});
+//     }
 
-    return result;
-}
+//     return result;
+// }
 
 fn parse_time_records(optsrc: &Option<String>) -> Vector<TimeRecord> {
     let mut result = Vector::new();
@@ -165,97 +159,100 @@ fn parse_time_records(optsrc: &Option<String>) -> Vector<TimeRecord> {
     return result;
 }
 
-fn parse_ical(file_path: String) -> (TodoMap, IcalCalendar, Vector<Task>, OrdSet<String>) {
+fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
+    let mut summary = String::new();
+    let mut description = None;
+    let mut uid = String::new();
+    let mut categories = Vector::new();
+    let mut priority = 0;
+    let mut status = None;
+    let mut seq = 0;
+    let mut timestamps = Vector::new();
+
+    for property in &ical_todo.properties {
+        // println!("{}", property);
+        // println!("{}", type_of(&property));
+
+        match property.name.as_ref() {
+
+            "UID" => {uid = property.value.as_ref().unwrap().clone();}
+            "SUMMARY" => {summary = property.value.as_ref().unwrap().clone();}
+            "DESCRIPTION" => {description = property.value.clone();}
+            "CATEGORIES" => {
+                if (property.value.is_some()) {
+                    categories.insert(0,  property.value.as_ref().unwrap().clone());
+                }
+            }
+            "STATUS" => {status = property.value.clone();}
+            "PRIORITY" => {
+                if (property.value.is_some()) {
+                    priority = property.value.as_ref().unwrap().parse::<u32>().unwrap();
+                }
+            }
+            "SEQUENCE" => {
+                if (property.value.is_some()) {
+                    seq = property.value.as_ref().unwrap().parse::<u32>().unwrap();
+                }
+            },
+            "TIMESTAMPS" => {
+                if (property.value.is_some()) {
+                    timestamps =
+                        parse_time_records(&property.value);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    return Ok(Task::new(summary, description, uid, categories, priority, status, seq, timestamps));
+}
+
+fn parse_ical(file_path: String) -> (TaskMap, OrdSet<String>) {
     let buf = BufReader::new(File::open(file_path)
         .unwrap());
 
     let mut reader = ical::IcalParser::new(buf);
 
-    let mut tasks = Vector::new();
     let mut tags = OrdSet::new();
 
     let ical = reader.next().unwrap().unwrap();
 
-    let tracker_todos = todos_by_uid(&ical.todos);
-    println!("todos: {:?}", tracker_todos);
+    // let tracker_todos = todos_by_uid(&ical.todos);
+    // println!("todos: {:?}", tracker_todos);
 
-    for (uid, todo) in &tracker_todos {
-        // println!("{}", type_of(&todo.properties));
-        let mut summary = String::new();
-        let mut description = None;
-        let mut uid = String::new();
-        let mut categories = Vector::new();
-        let mut priority = 0;
-        let mut status = None;
-        let mut seq = 0;
-        let mut timestamps = Vector::new();
+    let mut task_map = TaskMap::new();
 
-        for (name, property) in &todo.properties {
-            // println!("{}", property);
-            // println!("{}", type_of(&property));
-
-            match name.as_ref() {
-                "UID" => {uid = property.value.as_ref().unwrap().clone();}
-                "SUMMARY" => {summary = property.value.as_ref().unwrap().clone();}
-                "DESCRIPTION" => {description = property.value.clone();}
-                "CATEGORIES" => {
-                    if (property.value.is_some()) {
-                        categories.insert(0,  property.value.as_ref().unwrap().clone());
-                        tags.insert(property.value.as_ref().unwrap().clone());
-                    }
-                }
-                "STATUS" => {status = property.value.clone();}
-                "PRIORITY" => {
-                    if (property.value.is_some()) {
-                        priority = property.value.as_ref().unwrap().parse::<u32>().unwrap();
-                    }
-                }
-                "SEQUENCE" => {
-                    if (property.value.is_some()) {
-                        seq = property.value.as_ref().unwrap().parse::<u32>().unwrap();
-                    }
-                },
-                "TIMESTAMPS" => {
-                    if (property.value.is_some()) {
-                        timestamps =
-                            parse_time_records(&property.value);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        let task = Task::new(summary, description, uid, categories, priority, status, seq, timestamps);
-        // println!("{:?}", task);
-        tasks.insert(0, task);
+    for ical_todo in &ical.todos {
+        let task = parse_todo(ical_todo).unwrap();
+        task_map.insert(task.uid.clone(), task);
     }
 
 
     // let tags = vector![String::from("computer"), String::from("outside")];
 
-    return (tracker_todos, ical, tasks, tags);
+    return (task_map, tags);
 }
 
-fn update_ical(src: &IcalCalendar, todo_map: &TodoMap) -> IcalCalendar {
-    let mut ical = src.clone();
+// fn update_ical(src: &IcalCalendar, todo_map: &TaskMap) -> IcalCalendar {
+//     let mut ical = src.clone();
 
-    ical.todos.clear();
-    for (uid, todo) in todo_map {
-        let mut ical_props = Vec::<Property>::new();
-        let mut ical_alarms = Vec::<IcalAlarm>::new();
+//     ical.todos.clear();
+//     for (uid, todo) in todo_map {
+//         let mut ical_props = Vec::<Property>::new();
+//         let mut ical_alarms = Vec::<IcalAlarm>::new();
 
-        for (name, task) in &todo.properties {
-            ical_props.insert(0, Property::clone(task));
-        }
+//         for (name, task) in &todo.properties {
+//             ical_props.insert(0, Property::clone(task));
+//         }
 
-        for alarm in &todo.alarms {
-            ical_alarms.insert(0, IcalAlarm::clone(alarm));
-        }
+//         for alarm in &todo.alarms {
+//             ical_alarms.insert(0, IcalAlarm::clone(alarm));
+//         }
 
-        ical.todos.insert(0, IcalTodo{properties: ical_props, alarms: ical_alarms});
-    }
-    return ical
-}
+//         ical.todos.insert(0, IcalTodo{properties: ical_props, alarms: ical_alarms});
+//     }
+//     return ical
+// }
 
 fn emit(cal: &IcalCalendar) {
     let generated = cal.generate();
@@ -276,14 +273,12 @@ pub fn main() {
     let focus = vector![String::from("todo"), String::from("active"), String::from("done"), String::from("all") ];
 
 
-    let (todos, ical, tasks, tags) = parse_ical(file_path);
+    let (tasks, tags) = parse_ical(file_path);
 
     let data = AppModel{
         tasks,
         tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
         focus,
-        todos: todos,
-        cal: Rc::new(ical),
         tracking: TrackingState{active: false, task_uid: "".to_string(), timestamp: Instant::now()},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")}
     };
@@ -362,8 +357,8 @@ fn ui_builder() -> impl Widget<AppModel> {
                 Flex::row()
                     .with_child(
                         Label::new(|(d, uid): &(AppModel, String), _env: &_| {
-                            let summary = &d.todos.get(uid).unwrap().properties.get("SUMMARY").unwrap().value;
-                            format!("[{}] SUMMARY: {:?}", uid, summary)
+                            let summary = &d.tasks.get(uid).unwrap().name;
+                            format!("[{}] Name: {:?}", uid, summary)
                             // let id = *item as usize;
                             // format!("{} | dsc: {:?} | cats: {:?} | pri: {} | sta: {:?} | seq: {}",
                             //         d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
@@ -403,7 +398,7 @@ fn ui_builder() -> impl Widget<AppModel> {
         .vertical()
         .lens(lens::Identity.map(
             // Expose shared data with children data
-            |d: &AppModel| (d.clone(), d.todos.keys().cloned().collect()),
+            |d: &AppModel| (d.clone(), d.tasks.keys().cloned().collect()),
             |d: &mut AppModel, x: (AppModel, Vector<String>)| {
                 // If shared data was changed reflect the changes in our AppModel
                 *d = x.0
@@ -418,9 +413,9 @@ fn ui_builder() -> impl Widget<AppModel> {
         Button::new("Save")
             .on_click(|_ctx, (model): &mut (AppModel), _env| {
                 // todo dont clone IcalCalendar
-                let newcal = update_ical(&mut IcalCalendar::clone(&model.cal), &model.todos);
-                emit(&newcal);
-                model.cal = Rc::new(newcal)
+                // let newcal = update_ical(&mut IcalCalendar::clone(&model.cal), &model.tasks);
+                // emit(&newcal);
+                // model.cal = Rc::new(newcal)
             })
             .fix_size(120.0, 20.0)
             .align_vertical(UnitPoint::CENTER),
@@ -429,20 +424,20 @@ fn ui_builder() -> impl Widget<AppModel> {
     root.add_child(
         Button::new("Add")
             .on_click(|_ctx, (model): &mut (AppModel), _env| {
-                let mut newtask = IcalTodo::new();
-                let uid = generate_uid();
-                assert_eq!(model.todos.contains_key(&uid), false, "VTODOs can't have duplicate UIDs");
+                // let mut newtask = IcalTodo::new();
+                // let uid = generate_uid();
+                // assert_eq!(model.tasks.contains_key(&uid), false, "VTODOs can't have duplicate UIDs");
 
-                let mut props = PropertyMap::new();
-                props.insert("UID".to_string(), Rc::new(ical_property!("UID", uid.clone())));
-                props.insert("SUMMARY".to_string(),
-                             Rc::new(ical_property!("SUMMARY", "this is new task")));                
+                // let mut props = PropertyMap::new();
+                // props.insert("UID".to_string(), Rc::new(ical_property!("UID", uid.clone())));
+                // props.insert("SUMMARY".to_string(),
+                //              Rc::new(ical_property!("SUMMARY", "this is new task")));                
 
-                model.todos.insert(uid.clone(),
-                                   TrackerTodo{properties: props,
-                                               alarms: Vector::new()});
+                // model.tasks.insert(uid.clone(),
+                //                    TrackerTodo{properties: props,
+                //                                alarms: Vector::new()});
 
-                println!("type = {:?}", type_of(newtask));
+                // println!("type = {:?}", type_of(newtask));
             })
             .fix_size(120.0, 20.0)
             .align_vertical(UnitPoint::CENTER),
