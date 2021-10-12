@@ -45,6 +45,9 @@ use std::env;
 use uuid::v1::{Timestamp, Context};
 use uuid::Uuid;
 
+// chrono
+use chrono::prelude::*;
+
 fn generate_uid() -> String {
 
     let context = Context::new(42);
@@ -102,14 +105,20 @@ struct Task {
     priority: u32,
     status: Option<String>,
     seq: u32,
-    timestamps: Vector<String>
+    timestamps: Vector<TimeRecord>,
+}
+
+#[derive(Debug, Clone, Data)]
+struct TimeRecord {
+    from: Instant,
+    to: Instant
 }
 
 impl Task {
     fn new(name: String, description: Option<String>,
            uid: String, categories: Vector<String>,
            priority: u32, status: Option<String>, seq: u32,
-           timestamps: Vector<String>) -> Task {
+           timestamps: Vector<TimeRecord>) -> Task {
         return Task{name, description, uid, categories, priority, status, seq, timestamps};
     }
 }
@@ -139,6 +148,18 @@ fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> TodoMap {
 
         result.insert(properties.get("UID").unwrap().value.clone().unwrap(),
                       TrackerTodo{properties, alarms: Vector::new()});
+    }
+
+    return result;
+}
+
+fn parse_time_records(optsrc: &Option<String>) -> Vector<TimeRecord> {
+    let mut result = Vector::new();
+
+    let split = optsrc.as_ref().unwrap().split(";");
+
+    for s in split {
+        let res = Utc.datetime_from_str(&s, "%Y-%m-%d %H:%M:%S");
     }
 
     return result;
@@ -197,7 +218,7 @@ fn parse_ical(file_path: String) -> (TodoMap, IcalCalendar, Vector<Task>, OrdSet
                 "TIMESTAMPS" => {
                     if (property.value.is_some()) {
                         timestamps =
-                            convert_ts(property.value.clone());
+                            parse_time_records(&property.value);
                     }
                 }
                 _ => {}
@@ -215,7 +236,7 @@ fn parse_ical(file_path: String) -> (TodoMap, IcalCalendar, Vector<Task>, OrdSet
     return (tracker_todos, ical, tasks, tags);
 }
 
-fn update_ical(src: & IcalCalendar, todo_map: &TodoMap) -> IcalCalendar {
+fn update_ical(src: &IcalCalendar, todo_map: &TodoMap) -> IcalCalendar {
     let mut ical = src.clone();
 
     ical.todos.clear();

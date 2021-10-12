@@ -10,7 +10,7 @@ druid = { git = "https://github.com/linebender/druid.git", features=['im']}
 # ical = "0.6.*"
 ical = { git = "https://github.com/migmedia/ical-rs", features=['ical', 'generator'] }
 uuid = { version = "0.8", features = ["v1"] }
-
+chrono = { version = "0.4" }
 # [dependencies.ical]
 # version = "0.6.*"
 # default-features = false
