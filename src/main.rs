@@ -86,7 +86,8 @@ struct AppModel {
     tags: Vector<String>,
     focus: Vector<String>,
     tracking: TrackingState,
-    view: ViewState
+    view: ViewState,
+    currentTask: String,
 }
 
 
@@ -280,7 +281,8 @@ pub fn main() {
         tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
         focus,
         tracking: TrackingState{active: false, task_uid: "".to_string(), timestamp: Instant::now()},
-        view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")}
+        view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
+        currentTask: "".to_string()
     };
 
     let main_window = WindowDesc::new(ui_builder())
@@ -309,6 +311,8 @@ fn ui_builder() -> impl Widget<AppModel> {
     let mut root = Flex::column();
 
     let mut main_row = Flex::row().cross_axis_alignment(CrossAxisAlignment::Start);
+
+    let mut tasks_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
     let mut focus_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
 
@@ -349,10 +353,7 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     main_row.add_flex_child(focus_column, 0.5);
 
-
-    // Build a list with shared data
-    main_row.add_flex_child(
-        Scroll::new(
+    let tasks_scroll = Scroll::new(
             List::new(|| {
                 Flex::row()
                     .with_child(
@@ -364,32 +365,12 @@ fn ui_builder() -> impl Widget<AppModel> {
                             //         d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
                             //         d.tasks[id].priority, d.tasks[id].status, d.tasks[id].seq)
                         })
+                        .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
+                            shared.currentTask = uid.clone();
+                        })
                         .align_vertical(UnitPoint::LEFT),
                     )
                     .with_flex_spacer(1.0)
-                    .with_child(
-                        Button::new("Start tracking")
-                            .on_click(|_ctx, (shared, item): &mut (AppModel, String), _env| {
-                                // We have access to both child's data and shared data.
-                                // Remove element from right list.
-                                // shared.retain(|v| v != item);
-                                start_tracking(shared, &item);
-                            })
-                            .fix_size(120.0, 20.0)
-                            .align_vertical(UnitPoint::CENTER),
-                    )
-                    .with_child(
-                        Button::new("Stop tracking")
-                            .on_click(|_ctx, (shared, item): &mut (AppModel, String), _env| {
-                                // We have access to both child's data and shared data.
-                                // Remove element from right list.
-                                // shared.retain(|v| v != item);
-                                stop_tracking(shared, &item);
-                            })
-                            .fix_size(120.0, 20.0)
-                            .align_vertical(UnitPoint::CENTER),
-                    )
-                    .padding(10.0)
                     .background(Color::rgb(0.5, 0.0, 0.5))
                     .fix_height(50.0)
             })
@@ -403,9 +384,58 @@ fn ui_builder() -> impl Widget<AppModel> {
                 // If shared data was changed reflect the changes in our AppModel
                 *d = x.0
             },
-        )),
-        1.0,
+        ));
+
+    // Build a list with shared data
+    tasks_column.add_flex_child(tasks_scroll, 2.0);
+
+    tasks_column.add_default_spacer();
+    tasks_column.add_child(Flex::row()
+                        .with_child(
+                        Button::new("Start tracking")
+                            .on_click(|_ctx, shared: &mut (AppModel), _env| {
+                                // We have access to both child's data and shared data.
+                                // Remove element from right list.
+                                // shared.retain(|v| v != item);
+                                // start_tracking(shared, &shared.currentTask);
+                            })
+                            .fix_size(120.0, 20.0)
+                            .align_vertical(UnitPoint::CENTER),
+                    )
+                    .with_child(
+                        Button::new("Stop tracking")
+                            .on_click(|_ctx, shared: &mut (AppModel), _env| {
+                                // We have access to both child's data and shared data.
+                                // Remove element from right list.
+                                // shared.retain(|v| v != item);
+                                // stop_tracking(shared, &shared.currentTask);
+                            })
+                            .fix_size(120.0, 20.0)
+                            .align_vertical(UnitPoint::CENTER),
+                    ));
+
+    tasks_column.add_flex_child(
+        Label::new(|(d): &(AppModel), _env: &_| {
+            if d.currentTask.eq("") {
+                return "".to_string();
+            }
+
+            let summary = &d.tasks.get(&d.currentTask).unwrap().name;
+            let description = &d.tasks.get(&d.currentTask).unwrap().description;
+
+            return format!("Title: {:?}\n Summary: {:?}", summary, description);
+            // let id = *item as usize;
+            // format!("{} | dsc: {:?} | cats: {:?} | pri: {} | sta: {:?} | seq: {}",
+            //         d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
+            //         d.tasks[id].priority, d.tasks[id].status, d.tasks[id].seq)
+        })
+        .padding(10.0)
+        .background(Color::rgb(0.5, 0.0, 0.5))
+        .fix_height(50.0),
+        1.0
     );
+
+    main_row.add_flex_child(tasks_column, 1.0);
 
     root.add_flex_child(main_row, 1.0);
 
