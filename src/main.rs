@@ -276,13 +276,16 @@ pub fn main() {
 
     let (tasks, tags) = parse_ical(file_path);
 
+    let null_uid = "".to_string();
+    let selected_task = tasks.keys().nth(0).unwrap_or(&null_uid).clone();
+
     let data = AppModel{
         tasks,
         tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
         focus,
         tracking: TrackingState{active: false, task_uid: "".to_string(), timestamp: Instant::now()},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
-        selected_task: "".to_string()
+        selected_task,
     };
 
     let main_window = WindowDesc::new(ui_builder())
@@ -316,6 +319,7 @@ fn ui_builder() -> impl Widget<AppModel> {
     let mut tasks_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
     let mut focus_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
+    static TASK_COLOR_BG: Color = Color::rgb8(127, 0, 127);
 
     focus_column.add_default_spacer();
     focus_column.add_flex_child(Label::new("Focus"), 1.0);
@@ -328,7 +332,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                 .padding(10.0)
                 .expand()
                 .height(30.0)
-                .background(Color::rgb(0.5, 0.5, 0.5))
+                .background(TASK_COLOR_BG.clone())
         }))
         .vertical()
         .lens(AppModel::focus)
@@ -345,7 +349,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                 .padding(10.0)
                 .expand()
                 .height(30.0)
-                .background(Color::rgb(0.5, 0.5, 0.5))
+                .background(TASK_COLOR_BG.clone())
         }))
         .vertical()
         .lens(AppModel::tags),
@@ -372,7 +376,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                         .align_vertical(UnitPoint::LEFT),
                     )
                     .with_flex_spacer(1.0)
-                    .background(Color::rgb(0.5, 0.0, 0.5))
+                    .background(TASK_COLOR_BG.clone())
                     .fix_height(50.0)
             })
             .with_spacing(10.),
@@ -394,7 +398,7 @@ fn ui_builder() -> impl Widget<AppModel> {
     tasks_column.add_child(Flex::row()
                         .with_child(
                         Button::new("Start tracking")
-                            .on_click(|_ctx, shared: &mut (AppModel), _env| {
+                            .on_click(|_ctx, shared: &mut AppModel, _env| {
                                 start_tracking(shared, shared.selected_task.clone());
                             })
                             .fix_size(120.0, 20.0)
@@ -402,7 +406,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                     )
                     .with_child(
                         Button::new("Stop tracking")
-                            .on_click(|_ctx, shared: &mut (AppModel), _env| {
+                            .on_click(|_ctx, shared: &mut AppModel, _env| {
                                 // We have access to both child's data and shared data.
                                 // Remove element from right list.
                                 // shared.retain(|v| v != item);
@@ -428,7 +432,7 @@ fn ui_builder() -> impl Widget<AppModel> {
             //         d.tasks[id].priority, d.tasks[id].status, d.tasks[id].seq)
         })
         .padding(10.0)
-        .background(Color::rgb(0.5, 0.0, 0.5))
+        .background(TASK_COLOR_BG.clone())
         .fix_height(50.0),
         1.0
     );
