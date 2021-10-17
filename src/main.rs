@@ -483,5 +483,6 @@ fn ui_builder() -> impl Widget<AppModel> {
             String::from("Inactive")
         }
     }).align_horizontal(UnitPoint::RIGHT))
+        .debug_paint_layout()
 }
 
