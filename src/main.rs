@@ -52,7 +52,6 @@ use chrono::prelude::*;
 type ImportResult<T> = std::result::Result<T, String>;
 
 fn generate_uid() -> String {
-
     let context = Context::new(42);
     let epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
     let ts = Timestamp::from_unix(&context, epoch.as_secs(), epoch.subsec_nanos());
@@ -101,7 +100,7 @@ struct Task {
     priority: u32,
     status: Option<String>,
     seq: u32,
-    timestamps: Vector<TimeRecord>,
+    time_records: Vector<TimeRecord>,
 }
 
 #[derive(Debug, Clone, Data)]
@@ -114,8 +113,8 @@ impl Task {
     fn new(name: String, description: Option<String>,
            uid: String, categories: Vector<String>,
            priority: u32, status: Option<String>, seq: u32,
-           timestamps: Vector<TimeRecord>) -> Task {
-        return Task{name, description, uid, categories, priority, status, seq, timestamps};
+           time_records: Vector<TimeRecord>) -> Task {
+        return Task{name, description, uid, categories, priority, status, seq, time_records};
     }
 }
 
@@ -169,7 +168,7 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
     let mut priority = 0;
     let mut status = None;
     let mut seq = 0;
-    let mut timestamps = Vector::new();
+    let mut time_records = Vector::new();
 
     for property in &ical_todo.properties {
         // println!("{}", property);
@@ -196,9 +195,9 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
                     seq = property.value.as_ref().unwrap().parse::<u32>().unwrap();
                 }
             },
-            "TIMESTAMPS" => {
+            "TIME_RECORDS" => {
                 if (property.value.is_some()) {
-                    timestamps =
+                    time_records =
                         parse_time_records(&property.value);
                 }
             }
@@ -206,7 +205,7 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
         }
     }
 
-    return Ok(Task::new(summary, description, uid, categories, priority, status, seq, timestamps));
+    return Ok(Task::new(summary, description, uid, categories, priority, status, seq, time_records));
 }
 
 fn parse_ical(file_path: String) -> (TaskMap, OrdSet<String>) {
@@ -306,6 +305,12 @@ fn start_tracking(data: &mut AppModel, uid: String) {
 }
 
 fn stop_tracking(data: &mut AppModel) {
+    if data.tracking.task_uid.is_empty() {return};
+
+    let mut task = data.tasks.get(&data.tracking.task_uid).expect("unknown uid").clone();
+    task.time_records.push_back(TimeRecord{from: data.tracking.timestamp.clone(), to: Rc::new(Utc::now())});
+    data.tasks = data.tasks.update(task.uid.clone(), task);
+
     data.tracking.active = false;
     data.tracking.task_uid = "".to_string();
 }
@@ -412,7 +417,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                                    .align_vertical(UnitPoint::CENTER),
                            ));
 
-    tasks_column.add_spacer(30.0);
+    tasks_column.add_spacer(10.0);
 
     tasks_column.add_flex_child(
         Label::new(|(d): &(AppModel), _env: &_| {
@@ -427,6 +432,8 @@ fn ui_builder() -> impl Widget<AppModel> {
         .fix_height(50.0),
         1.0
     );
+
+    tasks_column.add_spacer(10.0);
 
     tasks_column.add_flex_child(
         Label::new(|(d): &(AppModel), _env: &_| {
@@ -450,6 +457,31 @@ fn ui_builder() -> impl Widget<AppModel> {
         1.0
     );
 
+    tasks_column.add_spacer(10.0);
+
+    tasks_column.add_flex_child(
+        Label::new(|d: &AppModel, _env: &_| {
+            if d.selected_task.eq("") {
+                return "".to_string();
+            }
+
+            let task = &d.tasks.get(&d.selected_task).expect("unknown uid");
+            let mut result = String::new();
+
+            for record in &task.time_records {
+                let new_record = format!("{:?} - {:?}\n", record.from, record.to);
+                result.push_str(&new_record);
+            }
+
+            return result;
+        })
+        .padding(10.0)
+        .background(TASK_COLOR_BG.clone())
+        .fix_height(50.0),
+        1.0
+    );
+
+
     main_row.add_flex_child(tasks_column, 1.0);
 
     root.add_flex_child(main_row, 1.0);
@@ -469,6 +501,11 @@ fn ui_builder() -> impl Widget<AppModel> {
     root.add_child(
         Button::new("Add")
             .on_click(|_ctx, (model): &mut (AppModel), _env| {
+                let uid = generate_uid();
+                let task = Task::new("new task".to_string(), None, uid.clone(), Vector::new(),
+                                     0, None, 0, Vector::new());
+
+                model.tasks.insert(uid, task);
                 // let mut newtask = IcalTodo::new();
                 // let uid = generate_uid();
                 // assert_eq!(model.tasks.contains_key(&uid), false, "VTODOs can't have duplicate UIDs");
@@ -489,13 +526,18 @@ fn ui_builder() -> impl Widget<AppModel> {
     );
 
     root.with_child(Label::new(|d: &AppModel, _env: &_| {
-        if (d.tracking.active) {
-            let task = &d.tasks.get(&d.tracking.task_uid).expect("unknown uid");
-
-            format!("Started tracking '{}' at {:?}", task.name, d.tracking.timestamp)
+        if d.tracking.active {
+            let active_task = &d.tasks.get(&d.tracking.task_uid).expect("unknown uid");
+            format!("Started tracking '{}' at {:?}", active_task.name, d.tracking.timestamp)
         }
         else {
-            String::from("Inactive")
+            if d.selected_task.is_empty() {
+                format!("No records")
+            }
+            else {
+                let selected = d.tasks.get(&d.selected_task).expect("unknown uid");
+                format!("Records: {}", selected.time_records.len())
+            }
         }
     }).align_horizontal(UnitPoint::RIGHT))
         .debug_paint_layout()
