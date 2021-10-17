@@ -72,7 +72,7 @@ type TaskMap = HashMap<String, Task>;
 struct TrackingState {
     active: bool,
     task_uid: String,
-    timestamp: Instant
+    timestamp: Rc<DateTime<Utc>>
 }
 
 #[derive(Clone, Data)]
@@ -106,8 +106,8 @@ struct Task {
 
 #[derive(Debug, Clone, Data)]
 struct TimeRecord {
-    from: Instant,
-    to: Instant
+    from: Rc<DateTime<Utc>>,
+    to: Rc<DateTime<Utc>>,
 }
 
 impl Task {
@@ -284,7 +284,8 @@ pub fn main() {
         tasks,
         tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
         focus,
-        tracking: TrackingState{active: false, task_uid: "".to_string(), timestamp: Instant::now()},
+        tracking: TrackingState{active: false, task_uid: "".to_string(), timestamp:
+                                Rc::new(Utc::now())},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
         selected_task,
     };
@@ -300,16 +301,13 @@ pub fn main() {
 
 fn start_tracking(data: &mut AppModel, uid: String) {
     data.tracking.active = true;
-    data.tracking.timestamp = Instant::now();
+    data.tracking.timestamp = Rc::new(Utc::now());
     data.tracking.task_uid = uid;
-    println!("started tracking");
 }
 
 fn stop_tracking(data: &mut AppModel) {
     data.tracking.active = false;
     data.tracking.task_uid = "".to_string();
-    let elapsed = Instant::now() - data.tracking.timestamp;
-    println!("stopped tracking, elapsed: {:?}", elapsed);
 }
 
 fn ui_builder() -> impl Widget<AppModel> {
@@ -408,9 +406,6 @@ fn ui_builder() -> impl Widget<AppModel> {
                            .with_child(
                                Button::new("Stop tracking")
                                    .on_click(|_ctx, shared: &mut AppModel, _env| {
-                                       // We have access to both child's data and shared data.
-                                       // Remove element from right list.
-                                       // shared.retain(|v| v != item);
                                        stop_tracking(shared);
                                    })
                                    .fix_size(120.0, 20.0)
