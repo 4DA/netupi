@@ -18,10 +18,9 @@
 
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
-use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll};
+use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll, Container};
 use druid::{
-    AppLauncher, Color, Data, Lens, LocalizedString, UnitPoint, Widget, WidgetExt, WindowDesc,
-};
+    AppLauncher, Color, Data, Lens, LocalizedString, UnitPoint, Widget, WidgetExt, WindowDesc};
 
 // ical stuff
 extern crate ical;
@@ -360,8 +359,7 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     let tasks_scroll = Scroll::new(
             List::new(|| {
-                Flex::row()
-                    .with_child(
+                Container::new(
                         Label::new(|(d, uid): &(AppModel, String), _env: &_| {
                             let summary = &d.tasks.get(uid).unwrap().name;
                             format!("[{}] Name: {:?}", uid, summary)
@@ -370,12 +368,12 @@ fn ui_builder() -> impl Widget<AppModel> {
                             //         d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
                             //         d.tasks[id].priority, d.tasks[id].status, d.tasks[id].seq)
                         })
+                        .expand()
                         .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
                             shared.selected_task = uid.clone();
                         })
                         .align_vertical(UnitPoint::LEFT),
                     )
-                    .with_flex_spacer(1.0)
                     .background(TASK_COLOR_BG.clone())
                     .fix_height(50.0)
             })
@@ -394,27 +392,30 @@ fn ui_builder() -> impl Widget<AppModel> {
     // Build a list with shared data
     tasks_column.add_flex_child(tasks_scroll, 2.0);
 
-    tasks_column.add_default_spacer();
+    tasks_column.add_spacer(30.0);
     tasks_column.add_child(Flex::row()
-                        .with_child(
-                        Button::new("Start tracking")
-                            .on_click(|_ctx, shared: &mut AppModel, _env| {
-                                start_tracking(shared, shared.selected_task.clone());
-                            })
-                            .fix_size(120.0, 20.0)
-                            .align_vertical(UnitPoint::CENTER),
-                    )
-                    .with_child(
-                        Button::new("Stop tracking")
-                            .on_click(|_ctx, shared: &mut AppModel, _env| {
-                                // We have access to both child's data and shared data.
-                                // Remove element from right list.
-                                // shared.retain(|v| v != item);
-                                stop_tracking(shared);
-                            })
-                            .fix_size(120.0, 20.0)
-                            .align_vertical(UnitPoint::CENTER),
-                    ));
+                           .with_child(
+                               Button::new("Start tracking")
+                                   .on_click(|_ctx, shared: &mut AppModel, _env| {
+                                       start_tracking(shared, shared.selected_task.clone());
+                                   })
+                                   .fix_size(120.0, 20.0)
+                                   .align_vertical(UnitPoint::CENTER),
+                           )
+                           .with_default_spacer()
+                           .with_child(
+                               Button::new("Stop tracking")
+                                   .on_click(|_ctx, shared: &mut AppModel, _env| {
+                                       // We have access to both child's data and shared data.
+                                       // Remove element from right list.
+                                       // shared.retain(|v| v != item);
+                                       stop_tracking(shared);
+                                   })
+                                   .fix_size(120.0, 20.0)
+                                   .align_vertical(UnitPoint::CENTER),
+                           ));
+
+    tasks_column.add_spacer(30.0);
 
     tasks_column.add_flex_child(
         Label::new(|(d): &(AppModel), _env: &_| {
