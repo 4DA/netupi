@@ -308,9 +308,16 @@ fn stop_tracking(data: &mut AppModel) {
     if data.tracking.task_uid.is_empty() {return};
 
     let mut task = data.tasks.get(&data.tracking.task_uid).expect("unknown uid").clone();
-    task.time_records.push_back(TimeRecord{from: data.tracking.timestamp.clone(), to: Rc::new(Utc::now())});
-    data.tasks = data.tasks.update(task.uid.clone(), task);
+    let now = Rc::new(Utc::now());
 
+    task.time_records.push_back(TimeRecord{from: data.tracking.timestamp.clone(), to: now.clone()});
+
+    let duration = now.signed_duration_since(data.tracking.timestamp.as_ref().clone());
+
+    println!("Task '{}' duration: {}:{}:{}", &task.name,
+             duration.num_hours(), duration.num_minutes(), duration.num_seconds());
+
+    data.tasks = data.tasks.update(task.uid.clone(), task);
     data.tracking.active = false;
     data.tracking.task_uid = "".to_string();
 }
