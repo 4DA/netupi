@@ -20,7 +20,9 @@ use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
 use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll, Container};
 use druid::{
-    AppLauncher, Color, Data, Lens, LocalizedString, UnitPoint, Widget, WidgetExt, WindowDesc};
+    AppLauncher, Color, Data,
+    FontWeight, FontDescriptor, FontFamily,
+    Lens, LocalizedString, theme, UnitPoint, Widget, WidgetExt, WindowDesc};
 
 // ical stuff
 extern crate ical;
@@ -320,6 +322,10 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     static TASK_COLOR_BG: Color = Color::rgb8(127, 0, 127);
 
+    static FONT_CAPTION_DESCR: FontDescriptor = FontDescriptor::new(FontFamily::SYSTEM_UI)
+    .with_weight(FontWeight::BOLD)
+    .with_size(18.0);
+
     focus_column.add_default_spacer();
     focus_column.add_flex_child(Label::new("Focus"), 1.0);
     focus_column.add_default_spacer();
@@ -360,14 +366,10 @@ fn ui_builder() -> impl Widget<AppModel> {
     let tasks_scroll = Scroll::new(
             List::new(|| {
                 Container::new(
-                        Label::new(|(d, uid): &(AppModel, String), _env: &_| {
-                            let summary = &d.tasks.get(uid).unwrap().name;
-                            format!("[{}] Name: {:?}", uid, summary)
-                            // let id = *item as usize;
-                            // format!("{} | dsc: {:?} | cats: {:?} | pri: {} | sta: {:?} | seq: {}",
-                            //         d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
-                            //         d.tasks[id].priority, d.tasks[id].status, d.tasks[id].seq)
-                        })
+                    Label::new(|(d, uid): &(AppModel, String), _env: &_| {
+                            let task = d.tasks.get(uid).expect("unknown uid");
+                            format!("{}", task.name)
+                    })
                         .expand()
                         .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
                             shared.selected_task = uid.clone();
@@ -422,15 +424,30 @@ fn ui_builder() -> impl Widget<AppModel> {
             if d.selected_task.eq("") {
                 return "".to_string();
             }
+            d.tasks.get(&d.selected_task).expect("unknown uid").name.clone()
+        })
+        .with_font(FONT_CAPTION_DESCR.clone())
+        .padding(10.0)
+        .background(TASK_COLOR_BG.clone())
+        .fix_height(50.0),
+        1.0
+    );
 
-            let summary = &d.tasks.get(&d.selected_task).unwrap().name;
-            let description = &d.tasks.get(&d.selected_task).unwrap().description;
+    tasks_column.add_flex_child(
+        Label::new(|(d): &(AppModel), _env: &_| {
+            if d.selected_task.eq("") {
+                return "".to_string();
+            }
 
-            return format!("Title: {:?}\n Summary: {:?}", summary, description);
-            // let id = *item as usize;
-            // format!("{} | dsc: {:?} | cats: {:?} | pri: {} | sta: {:?} | seq: {}",
-            //         d.tasks[id].name, d.tasks[id].description, d.tasks[id].categories,
-            //         d.tasks[id].priority, d.tasks[id].status, d.tasks[id].seq)
+            let task = &d.tasks.get(&d.selected_task).expect("unknown uid");
+
+            if let Some(text) = &task.description {
+                return format!("{}", text);
+            }
+            else {
+                return "".to_string();
+            }
+
         })
         .padding(10.0)
         .background(TASK_COLOR_BG.clone())
@@ -478,7 +495,9 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     root.with_child(Label::new(|d: &AppModel, _env: &_| {
         if (d.tracking.active) {
-            format!("Elapsed: {:?}", Instant::now().duration_since(d.tracking.timestamp))
+            let task = &d.tasks.get(&d.tracking.task_uid).expect("unknown uid");
+
+            format!("Started tracking '{}' at {:?}", task.name, d.tracking.timestamp)
         }
         else {
             String::from("Inactive")
