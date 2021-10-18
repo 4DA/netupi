@@ -223,8 +223,14 @@ fn parse_ical(file_path: String) -> (TaskMap, OrdSet<String>) {
 
     let mut task_map = TaskMap::new();
 
+
     for ical_todo in &ical.todos {
         let task = parse_todo(ical_todo).unwrap();
+
+        for tag in &task.categories {
+            tags.insert(tag.clone());
+        }
+
         task_map.insert(task.uid.clone(), task);
     }
 
@@ -271,8 +277,15 @@ pub fn main() {
         _ => args[1].clone(),
     };
 
-    let focus = vector![String::from("todo"), String::from("active"), String::from("done"), String::from("all") ];
+    // "NEEDS-ACTION" ;Indicates to-do needs action.
+    // "COMPLETED"    ;Indicates to-do completed.
+    // "IN-PROCESS"   ;Indicates to-do in process of.
+    // "CANCELLED"    ;Indicates to-do was cancelled.
 
+    let focus = vector![String::from("Needs action"),
+                        String::from("Completed"),
+                        String::from("In process"),
+                        String::from("Cancelled") ];
 
     let (tasks, tags) = parse_ical(file_path);
 
