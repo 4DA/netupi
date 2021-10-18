@@ -18,9 +18,9 @@
 
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
-use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll, Container};
+use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll, Container, Painter};
 use druid::{
-    AppLauncher, Color, Data,
+    AppLauncher, Color, Data, PaintCtx, RenderContext,
     FontWeight, FontDescriptor, FontFamily,
     Lens, LocalizedString, theme, UnitPoint, Widget, WidgetExt, WindowDesc};
 
@@ -331,13 +331,14 @@ fn ui_builder() -> impl Widget<AppModel> {
     let mut focus_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
     static TASK_COLOR_BG: Color = Color::rgb8(127, 0, 127);
+    static TASK_ACTIVE_COLOR_BG: Color = Color::rgb8(127, 0, 127);
 
     static FONT_CAPTION_DESCR: FontDescriptor = FontDescriptor::new(FontFamily::SYSTEM_UI)
     .with_weight(FontWeight::BOLD)
     .with_size(18.0);
 
     focus_column.add_default_spacer();
-    focus_column.add_flex_child(Label::new("Focus"), 1.0);
+    focus_column.add_flex_child(Label::new("Focus").with_font(FONT_CAPTION_DESCR.clone()), 1.0);
     focus_column.add_default_spacer();
 
     focus_column.add_child(
@@ -354,7 +355,7 @@ fn ui_builder() -> impl Widget<AppModel> {
     );
 
     focus_column.add_default_spacer();
-    focus_column.add_child(Label::new("Tags"));
+    focus_column.add_child(Label::new("Tags").with_font(FONT_CAPTION_DESCR.clone()));
     focus_column.add_default_spacer();
 
     focus_column.add_flex_child(
@@ -375,6 +376,18 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     let tasks_scroll = Scroll::new(
             List::new(|| {
+
+                let task_painter =
+                    Painter::new(|ctx: &mut PaintCtx, (shared, uid): &(AppModel, String), _env| {
+                        let bounds = ctx.size().to_rect();
+                        if shared.selected_task.eq(uid) {
+                            ctx.fill(bounds, &TASK_ACTIVE_COLOR_BG);
+                        }
+                        else {
+                            ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                        }
+                    });
+
                 Container::new(
                     Label::new(|(d, uid): &(AppModel, String), _env: &_| {
                             let task = d.tasks.get(uid).expect("unknown uid");
@@ -386,7 +399,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                         })
                         .align_vertical(UnitPoint::LEFT),
                     )
-                    .background(TASK_COLOR_BG.clone())
+                    .background(task_painter)
                     .fix_height(50.0)
             })
             .with_spacing(10.),
