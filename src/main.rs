@@ -18,10 +18,11 @@
 
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
-use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll, Container, Painter};
+use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll, Controller, ControllerHost, Container, Painter};
 use druid::{
-    AppLauncher, Color, Data, PaintCtx, RenderContext,
+    AppLauncher, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     FontWeight, FontDescriptor, FontFamily,
+    Menu, MenuItem,
     Lens, LocalizedString, theme, UnitPoint, Widget, WidgetExt, WindowDesc};
 
 // ical stuff
@@ -335,6 +336,74 @@ fn stop_tracking(data: &mut AppModel) {
     data.tracking.task_uid = "".to_string();
 }
 
+fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
+    let selected_task = d.tasks.get(current).expect("unknown uid");
+
+    let uid = current.clone();
+
+    // TODO: understand ownership with 'static type bound here
+
+    let start_stop_item =
+        if uid.eq(&d.tracking.task_uid) {
+            MenuItem::new(LocalizedString::new("Stop tracking")).on_activate(
+                |_ctx, d: &mut AppModel, _env| {
+                    stop_tracking(d);
+                }
+            )
+        } else if d.tracking.task_uid.is_empty() {
+            MenuItem::new(LocalizedString::new("Start tracking")).on_activate(
+                move |_ctx, d: &mut AppModel, _env| {
+                    start_tracking(d, uid.clone());
+                }
+            )
+        } else {
+            MenuItem::new(LocalizedString::new("Switch to")).on_activate(
+                move |_ctx, d: &mut AppModel, _env| {
+                    stop_tracking(d); start_tracking(d, uid.clone());
+                }
+            )
+        };
+
+    Menu::empty()
+        .entry(
+            start_stop_item,
+        )
+        .entry(
+            MenuItem::new(LocalizedString::new("Edit"))
+                .on_activate(|_ctx, data: &mut AppModel, _env| {}),
+        )
+        .entry(
+            MenuItem::new(LocalizedString::new("New task"))
+                .on_activate(|_ctx, data: &mut AppModel, _env| {}),
+        )
+        .entry(
+            MenuItem::new(LocalizedString::new("Delete")).on_activate(
+                |_ctx, data: &mut AppModel, _env| {},
+            ),
+        )
+}
+
+struct ContextMenuController;
+
+impl<W: Widget<(AppModel, String)>> Controller<(AppModel, String), W> for ContextMenuController {
+    fn event(
+        &mut self,
+        child: &mut W,
+        ctx: &mut EventCtx,
+        event: &Event,
+        data: &mut (AppModel, String),
+        env: &Env,
+    ) {
+        match event {
+            Event::MouseDown(ref mouse) if mouse.button.is_right() => {
+                ctx.show_context_menu(make_task_context_menu(&data.0, &data.1), mouse.pos);
+            }
+            _ => child.event(ctx, event, data, env),
+        }
+    }
+}
+
+
 fn ui_builder() -> impl Widget<AppModel> {
     let mut root = Flex::column();
 
@@ -401,10 +470,10 @@ fn ui_builder() -> impl Widget<AppModel> {
                         }
                     });
 
-                Container::new(
+                let container = Container::new(
                     Label::new(|(d, uid): &(AppModel, String), _env: &_| {
-                            let task = d.tasks.get(uid).expect("unknown uid");
-                            format!("{}", task.name)
+                        let task = d.tasks.get(uid).expect("unknown uid");
+                        format!("{}", task.name)
                     })
                         .expand()
                         .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
@@ -413,9 +482,12 @@ fn ui_builder() -> impl Widget<AppModel> {
                         .align_vertical(UnitPoint::LEFT),
                     )
                     .background(task_painter)
-                    .fix_height(50.0)
+                    .fix_height(50.0);
+
+                // container
+                ControllerHost::new(container, ContextMenuController)
             })
-            .with_spacing(10.),
+            .with_spacing(10.)
         )
         .vertical()
         .lens(lens::Identity.map(
@@ -433,18 +505,16 @@ fn ui_builder() -> impl Widget<AppModel> {
     tasks_column.add_spacer(30.0);
     tasks_column.add_child(Flex::row()
                            .with_child(
-                               Button::new("Start tracking")
+                               Button::new("unused")
                                    .on_click(|_ctx, shared: &mut AppModel, _env| {
-                                       start_tracking(shared, shared.selected_task.clone());
                                    })
                                    .fix_size(120.0, 20.0)
                                    .align_vertical(UnitPoint::CENTER),
                            )
                            .with_default_spacer()
                            .with_child(
-                               Button::new("Stop tracking")
+                               Button::new("unused")
                                    .on_click(|_ctx, shared: &mut AppModel, _env| {
-                                       stop_tracking(shared);
                                    })
                                    .fix_size(120.0, 20.0)
                                    .align_vertical(UnitPoint::CENTER),
