@@ -262,6 +262,11 @@ fn parse_ical(file_path: String) -> (TaskMap, OrdSet<String>) {
 //     return ical
 // }
 
+fn get_any_task_uid(tasks: &TaskMap) -> String {
+    let null_uid = "".to_string();
+    tasks.keys().nth(0).unwrap_or(&null_uid).clone()
+}
+
 fn emit(cal: &IcalCalendar) {
     let generated = cal.generate();
     fs::write("/home/dc/Tasks-generated.ics", generated).expect("Unable to write Tasks-generated.ics");
@@ -289,9 +294,7 @@ pub fn main() {
                         String::from("Cancelled") ];
 
     let (tasks, tags) = parse_ical(file_path);
-
-    let null_uid = "".to_string();
-    let selected_task = tasks.keys().nth(0).unwrap_or(&null_uid).clone();
+    let selected_task = get_any_task_uid(&tasks);
 
     let data = AppModel{
         tasks,
@@ -300,7 +303,7 @@ pub fn main() {
         tracking: TrackingState{active: false, task_uid: "".to_string(), timestamp:
                                 Rc::new(Utc::now())},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
-        selected_task,
+        selected_task: selected_task
     };
 
     let main_window = WindowDesc::new(ui_builder())
@@ -336,6 +339,11 @@ fn stop_tracking(data: &mut AppModel) {
     data.tracking.task_uid = "".to_string();
 }
 
+fn delete_task(model: &mut AppModel, uid: &String) {
+    model.tasks.remove(uid);
+    model.selected_task = get_any_task_uid(&model.tasks);
+}
+
 fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
     let selected_task = d.tasks.get(current).expect("unknown uid");
 
@@ -364,6 +372,9 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
             )
         };
 
+    // TODO: understand ownership with 'static type bound here
+    let uid = current.clone();
+
     Menu::empty()
         .entry(
             start_stop_item,
@@ -374,11 +385,23 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
         )
         .entry(
             MenuItem::new(LocalizedString::new("New task"))
-                .on_activate(|_ctx, data: &mut AppModel, _env| {}),
+                .on_activate(|_ctx, model: &mut AppModel, _env| {
+                    let uid = generate_uid();
+                    let task = Task::new("new task".to_string(), None, uid.clone(), Vector::new(),
+                                         0, None, 0, Vector::new());
+
+                    // TODO WARN event: druid::core: WidgetId(8)
+                    //  received an event (MouseMove...) without
+                    //  having been laid out. This likely indicates a
+                    //  missed call to set_origin.
+                    model.tasks.insert(uid, task);
+                }),
         )
         .entry(
             MenuItem::new(LocalizedString::new("Delete")).on_activate(
-                |_ctx, data: &mut AppModel, _env| {},
+                move |_ctx, model: &mut AppModel, _env| {
+                    delete_task(model, &uid);
+                },
             ),
         )
 }
@@ -596,33 +619,6 @@ fn ui_builder() -> impl Widget<AppModel> {
                 // let newcal = update_ical(&mut IcalCalendar::clone(&model.cal), &model.tasks);
                 // emit(&newcal);
                 // model.cal = Rc::new(newcal)
-            })
-            .fix_size(120.0, 20.0)
-            .align_vertical(UnitPoint::CENTER),
-    );
-
-    root.add_child(
-        Button::new("Add")
-            .on_click(|_ctx, (model): &mut (AppModel), _env| {
-                let uid = generate_uid();
-                let task = Task::new("new task".to_string(), None, uid.clone(), Vector::new(),
-                                     0, None, 0, Vector::new());
-
-                model.tasks.insert(uid, task);
-                // let mut newtask = IcalTodo::new();
-                // let uid = generate_uid();
-                // assert_eq!(model.tasks.contains_key(&uid), false, "VTODOs can't have duplicate UIDs");
-
-                // let mut props = PropertyMap::new();
-                // props.insert("UID".to_string(), Rc::new(ical_property!("UID", uid.clone())));
-                // props.insert("SUMMARY".to_string(),
-                //              Rc::new(ical_property!("SUMMARY", "this is new task")));                
-
-                // model.tasks.insert(uid.clone(),
-                //                    TrackerTodo{properties: props,
-                //                                alarms: Vector::new()});
-
-                // println!("type = {:?}", type_of(newtask));
             })
             .fix_size(120.0, 20.0)
             .align_vertical(UnitPoint::CENTER),
