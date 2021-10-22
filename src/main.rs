@@ -18,6 +18,7 @@
 
 use core::time::Duration;
 
+use druid::widget::prelude::*;
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
 use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll, Controller, ControllerHost, Container, Painter};
@@ -394,10 +395,8 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
                 move |ctx, d: &mut AppModel, _env| {
                     start_tracking(d, uid.clone());
 
-                    let selector = Selector::new("process_rows");
-                    let rows = vec![1, 3, 10, 12];
-                    let command = Command::new(selector, rows, Target::Auto);
-                    println!("suchara");
+                    let selector = Selector::new("start_tracking");
+                    let command = Command::new(selector, uid.clone(), Target::Auto);
                     ctx.submit_command(command);
                 }
             )
@@ -443,7 +442,79 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
         )
 }
 
-struct TaskListWidget;
+struct TaskListWidget {
+    inner: List<(AppModel, String)>
+}
+
+impl TaskListWidget {
+    fn new() -> TaskListWidget {
+        static TASK_COLOR_BG: Color = Color::rgb8(127, 0, 127);
+        static TASK_ACTIVE_COLOR_BG: Color = Color::rgb8(127, 0, 127);
+
+        let inner = List::new(|| {
+
+                let task_painter =
+                    Painter::new(|ctx: &mut PaintCtx, (shared, uid): &(AppModel, String), _env| {
+                        let bounds = ctx.size().to_rect();
+                        if shared.selected_task.eq(uid) {
+                            ctx.fill(bounds, &TASK_ACTIVE_COLOR_BG);
+                        }
+                        else {
+                            ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                        }
+                    });
+
+                let container = Container::new(
+                    Label::new(|(d, uid): &(AppModel, String), _env: &_| {
+                        let task = d.tasks.get(uid).expect("unknown uid");
+                        format!("{}", task.name)
+                    })
+                        .expand()
+                        .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
+                            shared.selected_task = uid.clone();
+                        })
+                        .align_vertical(UnitPoint::LEFT),
+                    )
+                    .background(task_painter)
+                    .fix_height(50.0);
+
+                // container
+                ControllerHost::new(container, ContextMenuController)
+        })
+            .with_spacing(10.);
+
+        return TaskListWidget{inner};
+    }
+}
+
+impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut (AppModel, Vector<String>), _env: &Env) {
+        match event {
+            Event::Command(cmd) => {
+                println!("cmd: {:?}", cmd);
+            },
+            _ => self.inner.event(ctx, event, _data, _env),
+        }
+    }
+
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &(AppModel, Vector<String>), _env: &Env) {
+        self.inner.lifecycle(ctx, event, _data, _env)
+    }
+
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &(AppModel, Vector<String>), _data: &(AppModel, Vector<String>), _env: &Env) {
+        self.inner.update(_ctx, _old_data, _data, _env)
+    }
+
+    fn layout(&mut self, _ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &(AppModel, Vector<String>), _env: &Env,
+    ) -> Size {
+        self.inner.layout(_ctx, bc, _data, _env)
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &(AppModel, Vector<String>), env: &Env) {
+        self.inner.paint(ctx, data, env)
+    }
+}
+
 
 struct ContextMenuController;
 
@@ -460,9 +531,6 @@ impl<W: Widget<(AppModel, String)>> Controller<(AppModel, String), W> for Contex
             Event::MouseDown(ref mouse) if mouse.button.is_right() => {
                 println!("mouse down");
                 ctx.show_context_menu(make_task_context_menu(&data.0, &data.1), mouse.pos);
-            }
-            Event::Command(cmd) => {
-                println!("cmd: {:?}", cmd);
             }
             _ => child.event(ctx, event, data, env),
         }
@@ -525,37 +593,7 @@ fn ui_builder() -> impl Widget<AppModel> {
     main_row.add_flex_child(focus_column, 0.5);
 
     let tasks_scroll = Scroll::new(
-            List::new(|| {
-
-                let task_painter =
-                    Painter::new(|ctx: &mut PaintCtx, (shared, uid): &(AppModel, String), _env| {
-                        let bounds = ctx.size().to_rect();
-                        if shared.selected_task.eq(uid) {
-                            ctx.fill(bounds, &TASK_ACTIVE_COLOR_BG);
-                        }
-                        else {
-                            ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                        }
-                    });
-
-                let container = Container::new(
-                    Label::new(|(d, uid): &(AppModel, String), _env: &_| {
-                        let task = d.tasks.get(uid).expect("unknown uid");
-                        format!("{}", task.name)
-                    })
-                        .expand()
-                        .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
-                            shared.selected_task = uid.clone();
-                        })
-                        .align_vertical(UnitPoint::LEFT),
-                    )
-                    .background(task_painter)
-                    .fix_height(50.0);
-
-                // container
-                ControllerHost::new(container, ContextMenuController)
-            })
-            .with_spacing(10.)
+            TaskListWidget::new()
         )
         .vertical()
         .lens(lens::Identity.map(
