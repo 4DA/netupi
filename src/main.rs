@@ -16,14 +16,17 @@
 // On Windows platform, don't show a console when opening the app.
 #![windows_subsystem = "windows"]
 
+use core::time::Duration;
+
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
 use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll, Controller, ControllerHost, Container, Painter};
 use druid::{
-    AppLauncher, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
+    AppLauncher, Application, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     FontWeight, FontDescriptor, FontFamily,
-    Menu, MenuItem,
-    Lens, LocalizedString, theme, UnitPoint, Widget, WidgetExt, WindowDesc};
+    Menu, MenuItem, TimerToken,
+    Lens, LocalizedString, theme, UnitPoint, Widget, WidgetExt, WindowDesc, WindowId,
+    Command, Selector, Target};
 
 // ical stuff
 extern crate ical;
@@ -109,6 +112,8 @@ struct TimeRecord {
     from: Rc<DateTime<Utc>>,
     to: Rc<DateTime<Utc>>,
 }
+
+static TIMER_INTERVAL: Duration = Duration::from_secs(10);
 
 impl Task {
     fn new(name: String, description: Option<String>,
@@ -287,11 +292,11 @@ pub fn main() {
     // "COMPLETED"    ;Indicates to-do completed.
     // "IN-PROCESS"   ;Indicates to-do in process of.
     // "CANCELLED"    ;Indicates to-do was cancelled.
+    // https://www.kanzaki.com/docs/ical/status.html
 
-    let focus = vector![String::from("Needs action"),
+    let focus = vector![String::from("Current"),
                         String::from("Completed"),
-                        String::from("In process"),
-                        String::from("Cancelled") ];
+                        String::from("All")];
 
     let (tasks, tags) = parse_ical(file_path);
     let selected_task = get_any_task_uid(&tasks);
@@ -300,13 +305,13 @@ pub fn main() {
         tasks,
         tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
         focus,
-        tracking: TrackingState{active: false, task_uid: "".to_string(), timestamp:
-                                Rc::new(Utc::now())},
+        tracking: TrackingState{active: false, task_uid: "".to_string(), timestamp: Rc::new(Utc::now())},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
         selected_task: selected_task
     };
 
     let main_window = WindowDesc::new(ui_builder())
+        .menu(make_menu)
         .title(LocalizedString::new("time-tracker-window-title").with_placeholder("Time tracker"));
     
     AppLauncher::with_window(main_window)
@@ -344,6 +349,32 @@ fn delete_task(model: &mut AppModel, uid: &String) {
     model.selected_task = get_any_task_uid(&model.tasks);
 }
 
+#[allow(unused_assignments)]
+fn make_menu(_: Option<WindowId>, model: &AppModel, _: &Env) -> Menu<AppModel> {
+    let mut base = Menu::empty();
+
+    // base.rebuild_on(|old_data, data, _env| old_data.menu_count != data.menu_count)
+    let mut file = Menu::new(LocalizedString::new("File"));
+
+    file = file.entry(
+        MenuItem::new(LocalizedString::new("Import ical"))
+            .on_activate(move |_ctx, data, _env| {})
+    );
+
+    file = file.entry(
+        MenuItem::new(LocalizedString::new("Export ical"))
+            .on_activate(move |_ctx, data, _env| {})
+    );
+    
+    file = file.entry(
+        MenuItem::new(LocalizedString::new("Exit"))
+            .on_activate(move |_ctx, data, _env| {Application::global().quit();})
+    );
+    
+    base.entry(file)
+}
+
+
 fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
     let selected_task = d.tasks.get(current).expect("unknown uid");
 
@@ -360,8 +391,14 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
             )
         } else if d.tracking.task_uid.is_empty() {
             MenuItem::new(LocalizedString::new("Start tracking")).on_activate(
-                move |_ctx, d: &mut AppModel, _env| {
+                move |ctx, d: &mut AppModel, _env| {
                     start_tracking(d, uid.clone());
+
+                    let selector = Selector::new("process_rows");
+                    let rows = vec![1, 3, 10, 12];
+                    let command = Command::new(selector, rows, Target::Auto);
+                    println!("suchara");
+                    ctx.submit_command(command);
                 }
             )
         } else {
@@ -406,6 +443,8 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
         )
 }
 
+struct TaskListWidget;
+
 struct ContextMenuController;
 
 impl<W: Widget<(AppModel, String)>> Controller<(AppModel, String), W> for ContextMenuController {
@@ -419,12 +458,18 @@ impl<W: Widget<(AppModel, String)>> Controller<(AppModel, String), W> for Contex
     ) {
         match event {
             Event::MouseDown(ref mouse) if mouse.button.is_right() => {
+                println!("mouse down");
                 ctx.show_context_menu(make_task_context_menu(&data.0, &data.1), mouse.pos);
+            }
+            Event::Command(cmd) => {
+                println!("cmd: {:?}", cmd);
             }
             _ => child.event(ctx, event, data, env),
         }
     }
 }
+
+
 
 
 fn ui_builder() -> impl Widget<AppModel> {
@@ -524,24 +569,6 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     // Build a list with shared data
     tasks_column.add_flex_child(tasks_scroll, 2.0);
-
-    tasks_column.add_spacer(30.0);
-    tasks_column.add_child(Flex::row()
-                           .with_child(
-                               Button::new("unused")
-                                   .on_click(|_ctx, shared: &mut AppModel, _env| {
-                                   })
-                                   .fix_size(120.0, 20.0)
-                                   .align_vertical(UnitPoint::CENTER),
-                           )
-                           .with_default_spacer()
-                           .with_child(
-                               Button::new("unused")
-                                   .on_click(|_ctx, shared: &mut AppModel, _env| {
-                                   })
-                                   .fix_size(120.0, 20.0)
-                                   .align_vertical(UnitPoint::CENTER),
-                           ));
 
     tasks_column.add_spacer(10.0);
 
