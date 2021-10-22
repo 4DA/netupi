@@ -395,21 +395,18 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
         if uid.eq(&d.tracking.task_uid) {
             MenuItem::new(LocalizedString::new("Stop tracking")).on_activate(
                 move |ctx, d: &mut AppModel, _env| {
-                    stop_tracking(d);
                     ctx.submit_command(COMMAND_TASK_STOP.with(()));
                 }
             )
         } else if d.tracking.task_uid.is_empty() {
             MenuItem::new(LocalizedString::new("Start tracking")).on_activate(
                 move |ctx, d: &mut AppModel, _env| {
-                    start_tracking(d, uid.clone());
                     ctx.submit_command(COMMAND_TASK_START.with(uid.clone()));
                 }
             )
         } else {
             MenuItem::new(LocalizedString::new("Switch to")).on_activate(
                 move |ctx, d: &mut AppModel, _env| {
-                    stop_tracking(d); start_tracking(d, uid.clone());
                     ctx.submit_command(COMMAND_TASK_SWITCH.with(uid.clone()));
                 }
             )
@@ -435,25 +432,13 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
             MenuItem::new(LocalizedString::new("New task"))
                 .on_activate(
                     move |ctx, model: &mut AppModel, _env| {
-                    let uid = generate_uid();
-
                     ctx.submit_command(COMMAND_TASK_NEW.with(()));
-
-                    let task = Task::new("new task".to_string(), None, uid.clone(), Vector::new(),
-                                         0, None, 0, Vector::new());
-
-                    // TODO WARN event: druid::core: WidgetId(8)
-                    //  received an event (MouseMove...) without
-                    //  having been laid out. This likely indicates a
-                    //  missed call to set_origin.
-                    model.tasks.insert(uid.clone(), task);
                 }),
         )
         .entry(
             MenuItem::new(LocalizedString::new("Delete")).on_activate(
                 move |ctx, model: &mut AppModel, _env| {
                     ctx.submit_command(COMMAND_TASK_DELETE.with(uid_delete.clone()));
-                    // delete_task(model, &uid);
                 },
             ),
         )
@@ -505,27 +490,40 @@ impl TaskListWidget {
 }
 
 impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut (AppModel, Vector<String>), _env: &Env) {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event,
+             data: &mut (AppModel, Vector<String>), _env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(COMMAND_TASK_START) => {
+            //TODO rewrite when "if let" guards are stablilized
+            // https://github.com/rust-lang/rust/issues/51114
 
+            Event::Command(cmd) if cmd.is(COMMAND_TASK_START) => {
+                start_tracking(&mut data.0, cmd.get(COMMAND_TASK_START).unwrap().clone());
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_STOP) => {
+                stop_tracking(&mut data.0);
 
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_SWITCH) => {
-
+                stop_tracking(&mut data.0);
+                start_tracking(&mut data.0, cmd.get(COMMAND_TASK_SWITCH).unwrap().clone());
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
+                let uid = generate_uid();
+                let task = Task::new("new task".to_string(), None, uid.clone(), Vector::new(),
+                                     0, None, 0, Vector::new());
 
+                data.0.tasks.insert(uid.clone(), task);
+                ctx.request_update();
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_EDIT) => {
 
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_DELETE) => {
-
+                delete_task(&mut data.0, cmd.get(COMMAND_TASK_DELETE).unwrap());
+                ctx.request_update();
             },
-            _ => self.inner.event(ctx, event, _data, _env),
+
+            _ => self.inner.event(ctx, event, data, _env),
         }
     }
 
