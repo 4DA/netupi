@@ -116,6 +116,14 @@ struct TimeRecord {
 
 static TIMER_INTERVAL: Duration = Duration::from_secs(10);
 
+const COMMAND_TASK_START:  Selector<String> = Selector::new("tcmenu.task_start");
+const COMMAND_TASK_STOP:   Selector         = Selector::new("tcmenu.task_stop");
+const COMMAND_TASK_SWITCH: Selector<String> = Selector::new("tcmenu.task_switch");
+const COMMAND_TASK_NEW:    Selector         = Selector::new("tcmenu.task_new");
+const COMMAND_TASK_EDIT:   Selector<String> = Selector::new("tcmenu.task_edit");
+const COMMAND_TASK_DELETE: Selector<String> = Selector::new("tcmenu.task_delete");
+
+
 impl Task {
     fn new(name: String, description: Option<String>,
            uid: String, categories: Vector<String>,
@@ -386,30 +394,31 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
     let start_stop_item =
         if uid.eq(&d.tracking.task_uid) {
             MenuItem::new(LocalizedString::new("Stop tracking")).on_activate(
-                |_ctx, d: &mut AppModel, _env| {
+                move |ctx, d: &mut AppModel, _env| {
                     stop_tracking(d);
+                    ctx.submit_command(COMMAND_TASK_STOP.with(()));
                 }
             )
         } else if d.tracking.task_uid.is_empty() {
             MenuItem::new(LocalizedString::new("Start tracking")).on_activate(
                 move |ctx, d: &mut AppModel, _env| {
                     start_tracking(d, uid.clone());
-
-                    let selector = Selector::new("start_tracking");
-                    let command = Command::new(selector, uid.clone(), Target::Auto);
-                    ctx.submit_command(command);
+                    ctx.submit_command(COMMAND_TASK_START.with(uid.clone()));
                 }
             )
         } else {
             MenuItem::new(LocalizedString::new("Switch to")).on_activate(
-                move |_ctx, d: &mut AppModel, _env| {
+                move |ctx, d: &mut AppModel, _env| {
                     stop_tracking(d); start_tracking(d, uid.clone());
+                    ctx.submit_command(COMMAND_TASK_SWITCH.with(uid.clone()));
                 }
             )
         };
 
     // TODO: understand ownership with 'static type bound here
-    let uid = current.clone();
+    let uid_new = current.clone();
+    let uid_edit = current.clone();
+    let uid_delete = current.clone();
 
     Menu::empty()
         .entry(
@@ -417,12 +426,19 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
         )
         .entry(
             MenuItem::new(LocalizedString::new("Edit"))
-                .on_activate(|_ctx, data: &mut AppModel, _env| {}),
+                .on_activate(
+                    move |ctx, data: &mut AppModel, _env| {
+                    ctx.submit_command(COMMAND_TASK_EDIT.with(uid_edit.clone()));
+                }),
         )
         .entry(
             MenuItem::new(LocalizedString::new("New task"))
-                .on_activate(|_ctx, model: &mut AppModel, _env| {
+                .on_activate(
+                    move |ctx, model: &mut AppModel, _env| {
                     let uid = generate_uid();
+
+                    ctx.submit_command(COMMAND_TASK_NEW.with(()));
+
                     let task = Task::new("new task".to_string(), None, uid.clone(), Vector::new(),
                                          0, None, 0, Vector::new());
 
@@ -430,13 +446,14 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
                     //  received an event (MouseMove...) without
                     //  having been laid out. This likely indicates a
                     //  missed call to set_origin.
-                    model.tasks.insert(uid, task);
+                    model.tasks.insert(uid.clone(), task);
                 }),
         )
         .entry(
             MenuItem::new(LocalizedString::new("Delete")).on_activate(
-                move |_ctx, model: &mut AppModel, _env| {
-                    delete_task(model, &uid);
+                move |ctx, model: &mut AppModel, _env| {
+                    ctx.submit_command(COMMAND_TASK_DELETE.with(uid_delete.clone()));
+                    // delete_task(model, &uid);
                 },
             ),
         )
@@ -490,8 +507,23 @@ impl TaskListWidget {
 impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut (AppModel, Vector<String>), _env: &Env) {
         match event {
-            Event::Command(cmd) => {
-                println!("cmd: {:?}", cmd);
+            Event::Command(cmd) if cmd.is(COMMAND_TASK_START) => {
+
+            },
+            Event::Command(cmd) if cmd.is(COMMAND_TASK_STOP) => {
+
+            },
+            Event::Command(cmd) if cmd.is(COMMAND_TASK_SWITCH) => {
+
+            },
+            Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
+
+            },
+            Event::Command(cmd) if cmd.is(COMMAND_TASK_EDIT) => {
+
+            },
+            Event::Command(cmd) if cmd.is(COMMAND_TASK_DELETE) => {
+
             },
             _ => self.inner.event(ctx, event, _data, _env),
         }
