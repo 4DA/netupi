@@ -76,7 +76,8 @@ type TaskMap = HashMap<String, Task>;
 struct TrackingState {
     active: bool,
     task_uid: String,
-    timestamp: Rc<DateTime<Utc>>
+    timestamp: Rc<DateTime<Utc>>,
+    timer_id: Rc<TimerToken>
 }
 
 #[derive(Clone, Data)]
@@ -116,13 +117,13 @@ struct TimeRecord {
 
 static TIMER_INTERVAL: Duration = Duration::from_secs(10);
 
-const COMMAND_TASK_START:  Selector<String> = Selector::new("tcmenu.task_start");
-const COMMAND_TASK_STOP:   Selector         = Selector::new("tcmenu.task_stop");
-const COMMAND_TASK_SWITCH: Selector<String> = Selector::new("tcmenu.task_switch");
-const COMMAND_TASK_NEW:    Selector         = Selector::new("tcmenu.task_new");
-const COMMAND_TASK_EDIT:   Selector<String> = Selector::new("tcmenu.task_edit");
-const COMMAND_TASK_DELETE: Selector<String> = Selector::new("tcmenu.task_delete");
-
+const COMMAND_TASK_START:  Selector<String>    = Selector::new("tcmenu.task_start");
+const COMMAND_TASK_STOP:   Selector            = Selector::new("tcmenu.task_stop");
+const COMMAND_TASK_SWITCH: Selector<String>    = Selector::new("tcmenu.task_switch");
+const COMMAND_TASK_NEW:    Selector            = Selector::new("tcmenu.task_new");
+const COMMAND_TASK_EDIT:   Selector<String>    = Selector::new("tcmenu.task_edit");
+const COMMAND_TASK_DELETE: Selector<String>    = Selector::new("tcmenu.task_delete");
+const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
 
 impl Task {
     fn new(name: String, description: Option<String>,
@@ -314,7 +315,9 @@ pub fn main() {
         tasks,
         tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
         focus,
-        tracking: TrackingState{active: false, task_uid: "".to_string(), timestamp: Rc::new(Utc::now())},
+        tracking: TrackingState{active: false, task_uid: "".to_string(),
+                                timestamp: Rc::new(Utc::now()),
+                                timer_id: Rc::new(TimerToken::INVALID)},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
         selected_task: selected_task
     };
@@ -498,14 +501,16 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
 
             Event::Command(cmd) if cmd.is(COMMAND_TASK_START) => {
                 start_tracking(&mut data.0, cmd.get(COMMAND_TASK_START).unwrap().clone());
+                data.0.tracking.timer_id = Rc::new(ctx.request_timer(TIMER_INTERVAL));
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_STOP) => {
                 stop_tracking(&mut data.0);
-
+                data.0.tracking.timer_id = Rc::new(TimerToken::INVALID);
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_SWITCH) => {
                 stop_tracking(&mut data.0);
                 start_tracking(&mut data.0, cmd.get(COMMAND_TASK_SWITCH).unwrap().clone());
+                data.0.tracking.timer_id = Rc::new(ctx.request_timer(TIMER_INTERVAL));
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
                 let uid = generate_uid();
@@ -522,6 +527,12 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 delete_task(&mut data.0, cmd.get(COMMAND_TASK_DELETE).unwrap());
                 ctx.request_update();
             },
+            Event::Timer(id) => {
+                if *id == *data.0.tracking.timer_id {
+                    println!("timer for task {} finished", data.0.tracking.task_uid);
+                    stop_tracking(&mut data.0);
+                }
+            }
 
             _ => self.inner.event(ctx, event, data, _env),
         }
