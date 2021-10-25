@@ -27,7 +27,7 @@ use druid::lens::{self, LensExt};
 use druid::widget::{Button, CrossAxisAlignment, Flex, Label, RawLabel, List, Scroll, Controller, ControllerHost, Container, Painter};
 use druid::{
     AppLauncher, Application, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
-    FontWeight, FontDescriptor, FontFamily,
+    FontWeight, FontDescriptor, FontFamily, Point,
     Menu, MenuItem, TimerToken,
     Lens, LocalizedString, theme, UnitPoint, Widget, WidgetPod, WidgetExt, WindowDesc, WindowId,
     Command, Selector, Target};
@@ -620,18 +620,17 @@ impl Widget<AppModel> for StatusBar {
             data.ui_timer_id = Rc::new(ctx.request_timer(UI_TIMER_INTERVAL));
         }
 
+        let mut status = get_status_string(&data);
+
         match event {
             Event::Timer(id) => {
                 if *id == *data.ui_timer_id {
                     data.ui_timer_id = Rc::new(ctx.request_timer(UI_TIMER_INTERVAL));
                     ctx.request_update();
-
-                    let mut status = get_status_string(&data);
                     self.inner.event(ctx, event, &mut status, env);
                 }
             },
-            _ => {let mut status = get_status_string(&data);
-                  self.inner.event(ctx, event, &mut status, env)},
+            _ => {self.inner.event(ctx, event, &mut status, env)},
         }
     }
 
@@ -647,7 +646,9 @@ impl Widget<AppModel> for StatusBar {
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &AppModel, env: &Env) -> Size {
         let status = get_status_string(&data);
-        self.inner.layout(ctx, &bc.loosen(), &status, env)
+        let ret = self.inner.layout(ctx, &bc.loosen(), &status, env);
+        self.inner.set_origin(ctx, &status, env, Point::ORIGIN);
+        return ret;
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &AppModel, env: &Env) {
