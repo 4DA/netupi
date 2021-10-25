@@ -18,15 +18,18 @@
 
 use core::time::Duration;
 
+// use druid::piet::{PietTextLayoutBuilder, TextStorage};
+use druid::text::{Attribute, RichText, TextStorage};
+use druid::piet::{PietTextLayoutBuilder, TextStorage as PietTextStorage};
 use druid::widget::prelude::*;
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
-use druid::widget::{Button, CrossAxisAlignment, Flex, Label, List, Scroll, Controller, ControllerHost, Container, Painter};
+use druid::widget::{Button, CrossAxisAlignment, Flex, Label, RawLabel, List, Scroll, Controller, ControllerHost, Container, Painter};
 use druid::{
     AppLauncher, Application, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     FontWeight, FontDescriptor, FontFamily,
     Menu, MenuItem, TimerToken,
-    Lens, LocalizedString, theme, UnitPoint, Widget, WidgetExt, WindowDesc, WindowId,
+    Lens, LocalizedString, theme, UnitPoint, Widget, WidgetPod, WidgetExt, WindowDesc, WindowId,
     Command, Selector, Target};
 
 // ical stuff
@@ -499,10 +502,6 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event,
              data: &mut (AppModel, Vector<String>), _env: &Env) {
 
-        if *data.0.ui_timer_id == TimerToken::INVALID {
-            data.0.ui_timer_id = Rc::new(ctx.request_timer(UI_TIMER_INTERVAL));
-        }
-
         match event {
             //TODO rewrite when "if let" guards are stablilized
             // https://github.com/rust-lang/rust/issues/51114
@@ -586,7 +585,76 @@ impl<W: Widget<(AppModel, String)>> Controller<(AppModel, String), W> for Contex
     }
 }
 
+struct StatusBar {
+    inner: WidgetPod<String, Label<String>>,
+}
 
+fn get_status_string(d: &AppModel) -> String {
+    if d.tracking.active {
+        let active_task = &d.tasks.get(&d.tracking.task_uid).expect("unknown uid");
+
+        let duration = Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
+        format!("Active task: '{}' {}", active_task.name, duration)
+    }
+    else {
+        if d.selected_task.is_empty() {
+            format!("No records")
+        }
+        else {
+            let selected = d.tasks.get(&d.selected_task).expect("unknown uid");
+            format!("Records: {}", selected.time_records.len())
+        }
+    }
+}
+
+impl StatusBar {
+    fn new() -> StatusBar {
+        StatusBar{inner: WidgetPod::new(Label::dynamic(|d: &String, _env| d.clone()))}
+    }
+}
+
+impl Widget<AppModel> for StatusBar {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppModel, env: &Env) {
+
+        if *data.ui_timer_id == TimerToken::INVALID {
+            data.ui_timer_id = Rc::new(ctx.request_timer(UI_TIMER_INTERVAL));
+        }
+
+        match event {
+            Event::Timer(id) => {
+                if *id == *data.ui_timer_id {
+                    data.ui_timer_id = Rc::new(ctx.request_timer(UI_TIMER_INTERVAL));
+                    ctx.request_update();
+
+                    let mut status = get_status_string(&data);
+                    self.inner.event(ctx, event, &mut status, env);
+                }
+            },
+            _ => {let mut status = get_status_string(&data);
+                  self.inner.event(ctx, event, &mut status, env)},
+        }
+    }
+
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &AppModel, env: &Env) {
+        let status = get_status_string(&data);
+        self.inner.lifecycle(ctx, event, &status, env);
+    }
+
+    fn update(&mut self, ctx: &mut UpdateCtx, _old_data: &AppModel, data: &AppModel, env: &Env) {
+        let status = get_status_string(&data);
+        self.inner.update(ctx, &status, env);
+    }
+
+    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &AppModel, env: &Env) -> Size {
+        let status = get_status_string(&data);
+        self.inner.layout(ctx, &bc.loosen(), &status, env)
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &AppModel, env: &Env) {
+        let status = get_status_string(&data);
+        self.inner.paint(ctx, &status, env);
+    }
+}
 
 
 fn ui_builder() -> impl Widget<AppModel> {
@@ -738,23 +806,7 @@ fn ui_builder() -> impl Widget<AppModel> {
             .align_vertical(UnitPoint::CENTER),
     );
 
-    root.with_child(Label::new(|d: &AppModel, _env: &_| {
-        if d.tracking.active {
-            let active_task = &d.tasks.get(&d.tracking.task_uid).expect("unknown uid");
-
-            let duration = Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
-            format!("Active task: '{}' {}", active_task.name, duration)
-        }
-        else {
-            if d.selected_task.is_empty() {
-                format!("No records")
-            }
-            else {
-                let selected = d.tasks.get(&d.selected_task).expect("unknown uid");
-                format!("Records: {}", selected.time_records.len())
-            }
-        }
-    }).align_horizontal(UnitPoint::RIGHT))
+    root.with_child(StatusBar::new()).align_horizontal(UnitPoint::RIGHT)
         .debug_paint_layout()
 }
 
