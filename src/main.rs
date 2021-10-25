@@ -94,6 +94,7 @@ struct AppModel {
     tracking: TrackingState,
     view: ViewState,
     selected_task: String,
+    ui_timer_id: Rc<TimerToken>
 }
 
 
@@ -116,6 +117,7 @@ struct TimeRecord {
 }
 
 static TIMER_INTERVAL: Duration = Duration::from_secs(10);
+static UI_TIMER_INTERVAL: Duration = Duration::from_secs(1);
 
 const COMMAND_TASK_START:  Selector<String>    = Selector::new("tcmenu.task_start");
 const COMMAND_TASK_STOP:   Selector            = Selector::new("tcmenu.task_stop");
@@ -319,7 +321,8 @@ pub fn main() {
                                 timestamp: Rc::new(Utc::now()),
                                 timer_id: Rc::new(TimerToken::INVALID)},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
-        selected_task: selected_task
+        selected_task: selected_task,
+        ui_timer_id: Rc::new(TimerToken::INVALID)
     };
 
     let main_window = WindowDesc::new(ui_builder())
@@ -495,6 +498,11 @@ impl TaskListWidget {
 impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event,
              data: &mut (AppModel, Vector<String>), _env: &Env) {
+
+        if *data.0.ui_timer_id == TimerToken::INVALID {
+            data.0.ui_timer_id = Rc::new(ctx.request_timer(UI_TIMER_INTERVAL));
+        }
+
         match event {
             //TODO rewrite when "if let" guards are stablilized
             // https://github.com/rust-lang/rust/issues/51114
@@ -733,7 +741,9 @@ fn ui_builder() -> impl Widget<AppModel> {
     root.with_child(Label::new(|d: &AppModel, _env: &_| {
         if d.tracking.active {
             let active_task = &d.tasks.get(&d.tracking.task_uid).expect("unknown uid");
-            format!("Started tracking '{}' at {:?}", active_task.name, d.tracking.timestamp)
+
+            let duration = Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
+            format!("Active task: '{}' {}", active_task.name, duration)
         }
         else {
             if d.selected_task.is_empty() {
