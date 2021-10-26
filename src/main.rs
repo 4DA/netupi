@@ -594,9 +594,10 @@ struct StatusBar {
 fn get_status_string(d: &AppModel) -> String {
     if d.tracking.active {
         let active_task = &d.tasks.get(&d.tracking.task_uid).expect("unknown uid");
-
         let duration = Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
-        format!("Active task: '{}' {}", active_task.name, duration)
+
+        format!("Active task: '{}' | Elapsed: {:02}h:{:02}m:{:02}s",
+                active_task.name, duration.num_hours(), duration.num_minutes(), duration.num_seconds())
     }
     else {
         if d.selected_task.is_empty() {
