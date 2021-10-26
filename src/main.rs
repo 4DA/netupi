@@ -454,7 +454,7 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
 }
 
 struct TaskListWidget {
-    inner: List<(AppModel, String)>
+    inner: WidgetPod<(AppModel, Vector<String>), List<(AppModel, String)>>
 }
 
 impl TaskListWidget {
@@ -494,7 +494,7 @@ impl TaskListWidget {
         })
             .with_spacing(10.);
 
-        return TaskListWidget{inner};
+        return TaskListWidget{inner: WidgetPod::new(inner)};
     }
 }
 
@@ -550,12 +550,14 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
     }
 
     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &(AppModel, Vector<String>), _data: &(AppModel, Vector<String>), _env: &Env) {
-        self.inner.update(_ctx, _old_data, _data, _env)
+        self.inner.update(_ctx, _data, _env)
     }
 
-    fn layout(&mut self, _ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &(AppModel, Vector<String>), _env: &Env,
+    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &(AppModel, Vector<String>), env: &Env,
     ) -> Size {
-        self.inner.layout(_ctx, bc, _data, _env)
+        let ret = self.inner.layout(ctx, bc, data, env);
+        self.inner.set_origin(ctx, &data, env, Point::ORIGIN);
+        return ret;
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &(AppModel, Vector<String>), env: &Env) {
