@@ -100,6 +100,8 @@ struct AppModel {
     tracking: TrackingState,
     view: ViewState,
     selected_task: String,
+    focus_filter: String,
+    tag_filter: String,
     ui_timer_id: Rc<TimerToken>
 }
 
@@ -352,6 +354,8 @@ pub fn main() {
                                 timer_id: Rc::new(TimerToken::INVALID)},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
         selected_task: selected_task,
+        focus_filter: String::from("Current"),
+        tag_filter: String::from(""),
         ui_timer_id: Rc::new(TimerToken::INVALID)
     };
 
@@ -710,15 +714,38 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     focus_column.add_child(
         Scroll::new(List::new(|| {
-            Label::new(|item: &String, _env: &_| format!("{}", item))
-                .align_vertical(UnitPoint::LEFT)
-                .padding(10.0)
-                .expand()
-                .height(30.0)
-                .background(TASK_COLOR_BG.clone())
+            Container::new(
+                Label::new(|item: &(AppModel, String), _env: &_| format!("{}", item.1))
+                    .align_vertical(UnitPoint::LEFT)
+                    .padding(10.0)
+                    .expand()
+                    .height(30.0)
+                    .background(
+                        Painter::new(|ctx: &mut PaintCtx, (shared, id): &(AppModel, String), _env| {
+                            let bounds = ctx.size().to_rect();
+                            if shared.focus_filter.eq(id) {
+                                ctx.fill(bounds, &TASK_ACTIVE_COLOR_BG);
+                            }
+                            else {
+                                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                            }
+                        })
+                    )
+            )
+                .on_click(|_ctx, (shared, what): &mut (AppModel, String), _env| {
+                    shared.focus_filter = what.clone();
+                    println!("click");
+                })
         }))
         .vertical()
-        .lens(AppModel::focus)
+            .lens(lens::Identity.map(
+                // Expose shared data with children data
+                |d: &AppModel| (d.clone(), d.focus.clone()),
+                |d: &mut AppModel, x: (AppModel, Vector<String>)| {
+                    // If shared data was changed reflect the changes in our AppModel
+                    *d = x.0
+                },
+            ))
     );
 
     focus_column.add_default_spacer();
@@ -727,15 +754,38 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     focus_column.add_flex_child(
         Scroll::new(List::new(|| {
-            Label::new(|item: &String, _env: &_| format!("{}", item))
-                .align_vertical(UnitPoint::LEFT)
-                .padding(10.0)
-                .expand()
-                .height(30.0)
-                .background(TASK_COLOR_BG.clone())
+            Container::new(
+                Label::new(|item: &(AppModel, String), _env: &_| format!("{}", item.1))
+                    .align_vertical(UnitPoint::LEFT)
+                    .padding(10.0)
+                    .expand()
+                    .height(30.0)
+                    .background(
+                        Painter::new(|ctx: &mut PaintCtx, (shared, id): &(AppModel, String), _env| {
+                            let bounds = ctx.size().to_rect();
+                            if shared.tag_filter.eq(id) {
+                                ctx.fill(bounds, &TASK_ACTIVE_COLOR_BG);
+                            }
+                            else {
+                                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                            }
+                        })
+                    )
+            )
+                .on_click(|_ctx, (shared, what): &mut (AppModel, String), _env| {
+                    shared.tag_filter = what.clone();
+                    println!("click");
+                })
         }))
         .vertical()
-        .lens(AppModel::tags),
+        .lens(lens::Identity.map(
+            // Expose shared data with children data
+            |d: &AppModel| (d.clone(), d.tags.clone()),
+            |d: &mut AppModel, x: (AppModel, Vector<String>)| {
+                // If shared data was changed reflect the changes in our AppModel
+                *d = x.0
+            },
+        )),
         1.0,
     );
 
