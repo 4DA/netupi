@@ -32,6 +32,8 @@ use druid::{
     Lens, LocalizedString, theme, UnitPoint, Widget, WidgetPod, WidgetExt, WindowDesc, WindowId,
     Command, Selector, Target};
 
+use rodio::{Decoder, OutputStream, source::Source, Sink};
+
 // ical stuff
 extern crate ical;
 use ical::generator;
@@ -47,6 +49,7 @@ use std::rc::Rc;
 use std::fs;
 use std::time::Instant;
 use std::time::SystemTime;
+use std::thread;
 
 use std::env;
 
@@ -129,6 +132,8 @@ const COMMAND_TASK_NEW:    Selector            = Selector::new("tcmenu.task_new"
 const COMMAND_TASK_EDIT:   Selector<String>    = Selector::new("tcmenu.task_edit");
 const COMMAND_TASK_DELETE: Selector<String>    = Selector::new("tcmenu.task_delete");
 const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
+
+const SOUND_TASK_FINISH: &str = "res/bell.ogg";
 
 impl Task {
     fn new(name: String, description: Option<String>,
@@ -290,6 +295,28 @@ fn get_any_task_uid(tasks: &TaskMap) -> String {
 fn emit(cal: &IcalCalendar) {
     let generated = cal.generate();
     fs::write("/home/dc/Tasks-generated.ics", generated).expect("Unable to write Tasks-generated.ics");
+}
+
+fn play_sound(file: String) {
+    thread::spawn(move || {
+        // Get a output stream handle to the default physical sound device
+        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+        // Load a sound from a file, using a path relative to Cargo.toml
+        let file = BufReader::new(File::open(file).unwrap());
+        // Decode that sound file into a source
+        let source = Decoder::new(file).unwrap();
+
+        let sink = Sink::try_new(&stream_handle).unwrap();
+        sink.append(source);
+
+        // The sound plays in a separate thread. This call will block the current thread until the sink
+        // has finished playing all its queued sounds.
+        // sink.sleep_until_end();
+
+        // The sound plays in a separate audio thread,
+        // so we need to keep the main thread alive while it's playing.
+        std::thread::sleep(std::time::Duration::from_secs(sink.len() as u64));
+    });
 }
 
 pub fn main() {
@@ -537,6 +564,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::Timer(id) => {
                 if *id == *data.0.tracking.timer_id {
                     println!("timer for task {} finished", data.0.tracking.task_uid);
+                    play_sound(SOUND_TASK_FINISH.to_string());
                     stop_tracking(&mut data.0);
                 }
             }
