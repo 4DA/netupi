@@ -156,7 +156,9 @@ const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_comp
 
 const SOUND_TASK_FINISH: &str = "res/bell.ogg";
 
-
+const TASK_FOCUS_CURRENT: &str = "Current";
+const TASK_FOCUS_COMPLETED: &str = "Completed";
+const TASK_FOCUS_ALL: &str = "All";
 
 impl Task {
     fn new(name: String, description: Option<String>,
@@ -173,10 +175,10 @@ impl AppModel {
             let task = self.tasks.get(uid).expect("unknown uid");
 
             let focus_ok = match self.focus_filter.as_str() {
-                "Current" => {task.status == TaskStatus::NEEDS_ACTION ||
+                TASK_FOCUS_CURRENT => {task.status == TaskStatus::NEEDS_ACTION ||
                               task.status == TaskStatus::IN_PROCESS},
-                "Completed" => task.status == TaskStatus::COMPLETED,
-                "All" => true,
+                TASK_FOCUS_COMPLETED => task.status == TaskStatus::COMPLETED,
+                TASK_FOCUS_ALL => true,
                 _ => panic!("Unknown focus filter {}", &self.focus_filter),
             };
 
@@ -399,9 +401,9 @@ pub fn main() {
     // "CANCELLED"    ;Indicates to-do was cancelled.
     // https://www.kanzaki.com/docs/ical/status.html
 
-    let focus = vector![String::from("Current"),
-                        String::from("Completed"),
-                        String::from("All")];
+    let focus = vector![TASK_FOCUS_CURRENT.to_string(),
+                        TASK_FOCUS_COMPLETED.to_string(),
+                        TASK_FOCUS_ALL.to_string()];
 
     let (tasks, tags) = parse_ical(file_path);
     let selected_task = get_any_task_uid(&tasks);
@@ -415,7 +417,7 @@ pub fn main() {
                                 timer_id: Rc::new(TimerToken::INVALID)},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
         selected_task: selected_task,
-        focus_filter: String::from("Current"),
+        focus_filter: TASK_FOCUS_CURRENT.to_string(),
         tag_filter: None,
         ui_timer_id: Rc::new(TimerToken::INVALID)
     };
