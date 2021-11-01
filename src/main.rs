@@ -105,7 +105,7 @@ struct AppModel {
     ui_timer_id: Rc<TimerToken>
 }
 
-#[derive(Debug, Clone, Data)]
+#[derive(Debug, Clone, Data, PartialEq)]
 enum TaskStatus {
     NEEDS_ACTION,
     COMPLETED,
@@ -113,10 +113,15 @@ enum TaskStatus {
     CANCELLED
 }
 
-impl std::cmp::PartialEq for TaskStatus {
-    fn eq(&self, other: &TaskStatus) -> bool {
-        //TODO
-        true
+impl TaskStatus {
+    fn to_string(&self) -> &str {
+        match &self {
+            TaskStatus::NEEDS_ACTION => "Needs action",
+            TaskStatus::COMPLETED    => "Completed",
+            TaskStatus::IN_PROCESS   => "In process",
+            TaskStatus::CANCELLED    => "Cancelled",
+            _ => {panic!("Unknown status {:?}", self);}
+        }
     }
 }
 
@@ -167,6 +172,14 @@ impl AppModel {
         self.tasks.keys().cloned().filter(|uid| {
             let task = self.tasks.get(uid).expect("unknown uid");
 
+            let focus_ok = match self.focus_filter.as_str() {
+                "Current" => {task.status == TaskStatus::NEEDS_ACTION ||
+                              task.status == TaskStatus::IN_PROCESS},
+                "Completed" => task.status == TaskStatus::COMPLETED,
+                "All" => true,
+                _ => panic!("Unknown focus filter {}", &self.focus_filter),
+            };
+
             let tag_ok =
                 if let Some(ref tag_filter) = self.tag_filter {
                     task.categories.contains(tag_filter)
@@ -174,7 +187,7 @@ impl AppModel {
                     true
                 };
 
-            tag_ok
+            return focus_ok && tag_ok;
         }).collect()
     }
 }
