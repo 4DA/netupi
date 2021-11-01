@@ -105,6 +105,20 @@ struct AppModel {
     ui_timer_id: Rc<TimerToken>
 }
 
+#[derive(Debug, Clone, Data)]
+enum TaskStatus {
+    NEEDS_ACTION,
+    COMPLETED,
+    IN_PROCESS,
+    CANCELLED
+}
+
+impl std::cmp::PartialEq for TaskStatus {
+    fn eq(&self, other: &TaskStatus) -> bool {
+        //TODO
+        true
+    }
+}
 
 #[derive(Debug, Clone, Data)]
 struct Task {
@@ -113,7 +127,7 @@ struct Task {
     uid: String,
     categories: Vector<String>,
     priority: u32,
-    status: Option<String>,
+    status: TaskStatus,
     seq: u32,
     time_records: Vector<TimeRecord>,
 }
@@ -137,10 +151,12 @@ const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_comp
 
 const SOUND_TASK_FINISH: &str = "res/bell.ogg";
 
+
+
 impl Task {
     fn new(name: String, description: Option<String>,
            uid: String, categories: Vector<String>,
-           priority: u32, status: Option<String>, seq: u32,
+           priority: u32, status: TaskStatus, seq: u32,
            time_records: Vector<TimeRecord>) -> Task {
         return Task{name, description, uid, categories, priority, status, seq, time_records};
     }
@@ -211,7 +227,7 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
     let mut uid = String::new();
     let mut categories = Vector::new();
     let mut priority = 0;
-    let mut status = None;
+    let mut status = TaskStatus::NEEDS_ACTION;
     let mut seq = 0;
     let mut time_records = Vector::new();
 
@@ -229,7 +245,20 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
                     categories.insert(0,  property.value.as_ref().unwrap().clone());
                 }
             }
-            "STATUS" => {status = property.value.clone();}
+            "STATUS" => {
+                status = if let Some(ref sta) = property.value {
+                    match sta.as_str() {
+                        "NEEDS-ACTION" => TaskStatus::NEEDS_ACTION,
+                        "COMPLETED" => TaskStatus::COMPLETED,
+                        "IN-PROCESS" => TaskStatus::IN_PROCESS,
+                        "CANCELLED" => TaskStatus::CANCELLED,
+                        _ => {panic!("Unknown status {}", sta);
+                              TaskStatus::NEEDS_ACTION}
+                    }
+                } else {
+                    TaskStatus::NEEDS_ACTION
+                };
+            }
             "PRIORITY" => {
                 if (property.value.is_some()) {
                     priority = property.value.as_ref().unwrap().parse::<u32>().unwrap();
@@ -348,6 +377,8 @@ pub fn main() {
         2 => args[1].clone(),
         _ => args[1].clone(),
     };
+
+    const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
 
     // "NEEDS-ACTION" ;Indicates to-do needs action.
     // "COMPLETED"    ;Indicates to-do completed.
@@ -526,7 +557,7 @@ impl TaskListWidget {
                 let container = Container::new(
                     Label::new(|(d, uid): &(AppModel, String), _env: &_| {
                         let task = d.tasks.get(uid).expect("unknown uid");
-                        format!("{}[{:?}]", task.name, task.categories)
+                        format!("{}[{:?}][{:?}]", task.name, task.status, task.categories)
                     })
                         .expand()
                         .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
@@ -570,7 +601,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
                 let uid = generate_uid();
                 let task = Task::new("new task".to_string(), None, uid.clone(), Vector::new(),
-                                     0, None, 0, Vector::new());
+                                     0, TaskStatus::NEEDS_ACTION, 0, Vector::new());
 
                 data.0.tasks.insert(uid.clone(), task);
                 ctx.request_update();
