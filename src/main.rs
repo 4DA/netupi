@@ -101,7 +101,7 @@ struct AppModel {
     view: ViewState,
     selected_task: String,
     focus_filter: String,
-    tag_filter: String,
+    tag_filter: Option<String>,
     ui_timer_id: Rc<TimerToken>
 }
 
@@ -143,6 +143,23 @@ impl Task {
            priority: u32, status: Option<String>, seq: u32,
            time_records: Vector<TimeRecord>) -> Task {
         return Task{name, description, uid, categories, priority, status, seq, time_records};
+    }
+}
+
+impl AppModel {
+    fn get_uids_filtered(&self) -> Vector<String> {
+        self.tasks.keys().cloned().filter(|uid| {
+            let task = self.tasks.get(uid).expect("unknown uid");
+
+            let tag_ok =
+                if let Some(ref tag_filter) = self.tag_filter {
+                    task.categories.contains(tag_filter)
+                } else {
+                    true
+                };
+
+            tag_ok
+        }).collect()
     }
 }
 
@@ -355,7 +372,7 @@ pub fn main() {
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
         selected_task: selected_task,
         focus_filter: String::from("Current"),
-        tag_filter: String::from(""),
+        tag_filter: None,
         ui_timer_id: Rc::new(TimerToken::INVALID)
     };
 
@@ -509,7 +526,7 @@ impl TaskListWidget {
                 let container = Container::new(
                     Label::new(|(d, uid): &(AppModel, String), _env: &_| {
                         let task = d.tasks.get(uid).expect("unknown uid");
-                        format!("{}", task.name)
+                        format!("{}[{:?}]", task.name, task.categories)
                     })
                         .expand()
                         .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
@@ -734,7 +751,6 @@ fn ui_builder() -> impl Widget<AppModel> {
             )
                 .on_click(|_ctx, (shared, what): &mut (AppModel, String), _env| {
                     shared.focus_filter = what.clone();
-                    println!("click");
                 })
         }))
         .vertical()
@@ -763,7 +779,8 @@ fn ui_builder() -> impl Widget<AppModel> {
                     .background(
                         Painter::new(|ctx: &mut PaintCtx, (shared, id): &(AppModel, String), _env| {
                             let bounds = ctx.size().to_rect();
-                            if shared.tag_filter.eq(id) {
+                            if shared.tag_filter.is_some() &&
+                                shared.tag_filter.as_ref().unwrap().eq(id) {
                                 ctx.fill(bounds, &TASK_ACTIVE_COLOR_BG);
                             }
                             else {
@@ -773,8 +790,14 @@ fn ui_builder() -> impl Widget<AppModel> {
                     )
             )
                 .on_click(|_ctx, (shared, what): &mut (AppModel, String), _env| {
-                    shared.tag_filter = what.clone();
-                    println!("click");
+                    if let Some(ref tf) = shared.tag_filter {
+                        if tf.eq(what) {
+                            shared.tag_filter = None;
+                            return;
+                        }
+                    }
+
+                    shared.tag_filter = Some(what.clone());
                 })
         }))
         .vertical()
@@ -797,7 +820,7 @@ fn ui_builder() -> impl Widget<AppModel> {
         .vertical()
         .lens(lens::Identity.map(
             // Expose shared data with children data
-            |d: &AppModel| (d.clone(), d.tasks.keys().cloned().collect()),
+            |d: &AppModel| (d.clone(), d.get_uids_filtered()),
             |d: &mut AppModel, x: (AppModel, Vector<String>)| {
                 // If shared data was changed reflect the changes in our AppModel
                 *d = x.0
@@ -876,19 +899,20 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     root.add_flex_child(main_row, 1.0);
 
-    root.add_child(
-        Button::new("Save")
-            .on_click(|_ctx, (model): &mut (AppModel), _env| {
-                // todo dont clone IcalCalendar
-                // let newcal = update_ical(&mut IcalCalendar::clone(&model.cal), &model.tasks);
-                // emit(&newcal);
-                // model.cal = Rc::new(newcal)
-            })
-            .fix_size(120.0, 20.0)
-            .align_vertical(UnitPoint::CENTER),
-    );
+    // bottom row 
+    // root.add_child(
+    //     Button::new("Save")
+    //         .on_click(|_ctx, (model): &mut (AppModel), _env| {
+    //             // todo dont clone IcalCalendar
+    //             // let newcal = update_ical(&mut IcalCalendar::clone(&model.cal), &model.tasks);
+    //             // emit(&newcal);
+    //             // model.cal = Rc::new(newcal)
+    //         })
+    //         .fix_size(120.0, 20.0)
+    //         .align_vertical(UnitPoint::CENTER),
+    // );
 
     root.with_child(StatusBar::new()).align_horizontal(UnitPoint::RIGHT)
-        .debug_paint_layout()
+        // .debug_paint_layout()
 }
 
