@@ -102,7 +102,6 @@ struct AppModel {
     selected_task: String,
     focus_filter: String,
     tag_filter: Option<String>,
-    ui_timer_id: Rc<TimerToken>
 }
 
 #[derive(Debug, Clone, Data, PartialEq)]
@@ -418,8 +417,7 @@ pub fn main() {
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
         selected_task: selected_task,
         focus_filter: TASK_FOCUS_CURRENT.to_string(),
-        tag_filter: None,
-        ui_timer_id: Rc::new(TimerToken::INVALID)
+        tag_filter: None
     };
 
     let main_window = WindowDesc::new(ui_builder())
@@ -684,6 +682,7 @@ impl<W: Widget<(AppModel, String)>> Controller<(AppModel, String), W> for Contex
 
 struct StatusBar {
     inner: WidgetPod<String, Label<String>>,
+    timer_id: TimerToken,
 }
 
 fn get_status_string(d: &AppModel) -> String {
@@ -707,23 +706,24 @@ fn get_status_string(d: &AppModel) -> String {
 
 impl StatusBar {
     fn new() -> StatusBar {
-        StatusBar{inner: WidgetPod::new(Label::dynamic(|d: &String, _env| d.clone()))}
+        StatusBar{inner: WidgetPod::new(Label::dynamic(|d: &String, _env| d.clone())),
+                  timer_id: TimerToken::INVALID}
     }
 }
 
 impl Widget<AppModel> for StatusBar {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppModel, env: &Env) {
 
-        if *data.ui_timer_id == TimerToken::INVALID {
-            data.ui_timer_id = Rc::new(ctx.request_timer(UI_TIMER_INTERVAL));
+        if self.timer_id == TimerToken::INVALID {
+            self.timer_id = ctx.request_timer(UI_TIMER_INTERVAL);
         }
 
         let mut status = get_status_string(&data);
 
         match event {
             Event::Timer(id) => {
-                if *id == *data.ui_timer_id {
-                    data.ui_timer_id = Rc::new(ctx.request_timer(UI_TIMER_INTERVAL));
+                if *id == self.timer_id {
+                    self.timer_id = ctx.request_timer(UI_TIMER_INTERVAL);
                     ctx.request_update();
                     self.inner.event(ctx, event, &mut status, env);
                 }
