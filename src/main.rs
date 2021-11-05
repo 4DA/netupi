@@ -24,7 +24,7 @@ use druid::piet::{PietTextLayoutBuilder, TextStorage as PietTextStorage};
 use druid::widget::prelude::*;
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
-use druid::widget::{Button, CrossAxisAlignment, Flex, Label, RawLabel, List, Scroll, Controller, ControllerHost, Container, Painter};
+use druid::widget::{Button, CrossAxisAlignment, Flex, Label, SizedBox, RawLabel, List, Scroll, Controller, ControllerHost, Container, Painter};
 use druid::{
     AppLauncher, Application, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     FontWeight, FontDescriptor, FontFamily, Point,
@@ -61,7 +61,9 @@ use uuid::Uuid;
 use chrono::prelude::*;
 
 mod editable_label;
+mod maybe;
 use crate::editable_label::EditableLabel;
+use crate::maybe::Maybe;
 
 type ImportResult<T> = std::result::Result<T, String>;
 
@@ -620,6 +622,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                                      0, TaskStatus::NEEDS_ACTION, 0, Vector::new());
 
                 data.0.tasks.insert(uid.clone(), task);
+                data.0.selected_task = "".to_string();
                 ctx.request_update();
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_EDIT) => {
@@ -813,7 +816,6 @@ fn task_details_widget() -> impl Widget<Task> {
         1.0
     );
 
-
     return column;
 }
 
@@ -940,13 +942,15 @@ fn ui_builder() -> impl Widget<AppModel> {
     tasks_column.add_spacer(10.0);
 
     tasks_column.add_flex_child(
-        task_details_widget()
+        Maybe::new(
+            || task_details_widget().boxed() ,
+            || SizedBox::empty().expand_width().boxed(),
+        )
             .lens(lens::Identity.map(
                 // Expose shared data with children data
-                |d: &AppModel| d.tasks.get(&d.selected_task).expect("unknown uid").clone(),
-                |d: &mut AppModel, x: Task| {
-                    // If shared data was changed reflect the changes in our AppModel
-                    d.tasks = d.tasks.update(d.selected_task.clone(), x);
+                |d: &AppModel| d.tasks.get(&d.selected_task).map_or(None, |r| Some(r.clone())),
+                |d: &mut AppModel, x: Option<Task>| {
+                    x.map(|new_task| d.tasks = d.tasks.update(d.selected_task.clone(), new_task));
                 },
             )),
         1.0
