@@ -174,8 +174,8 @@ impl Task {
 }
 
 impl AppModel {
-    fn get_uids_filtered(&self) -> Vector<String> {
-        self.tasks.keys().cloned().filter(|uid| {
+    fn get_uids_filtered(&self) -> impl Iterator<Item = String> + '_ {
+        self.tasks.keys().cloned().filter(move |uid| {
             let task = self.tasks.get(uid).expect("unknown uid");
 
             let focus_ok = match self.focus_filter.as_str() {
@@ -194,7 +194,7 @@ impl AppModel {
                 };
 
             return focus_ok && tag_ok;
-        }).collect()
+        })
     }
 }
 
@@ -880,9 +880,14 @@ fn ui_builder() -> impl Widget<AppModel> {
                         })
                     )
             )
-                .on_click(|_ctx, (shared, what): &mut (AppModel, String), _env| {
-                    shared.focus_filter = what.clone();
-                })
+            .on_click(|_ctx, (model, what): &mut (AppModel, String), _env| {
+                model.focus_filter = what.clone();
+
+                // select any task if currently selected is filtered out
+                if model.get_uids_filtered().find(|uid| uid.eq(&model.selected_task)).is_none() {
+                    model.selected_task = get_any_task_uid(&model.tasks);
+                }
+            })
         }))
         .vertical()
             .lens(lens::Identity.map(
@@ -951,7 +956,7 @@ fn ui_builder() -> impl Widget<AppModel> {
         .vertical()
         .lens(lens::Identity.map(
             // Expose shared data with children data
-            |d: &AppModel| (d.clone(), d.get_uids_filtered()),
+            |d: &AppModel| (d.clone(), d.get_uids_filtered().collect()),
             |d: &mut AppModel, x: (AppModel, Vector<String>)| {
                 // If shared data was changed reflect the changes in our AppModel
                 *d = x.0
