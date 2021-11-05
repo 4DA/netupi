@@ -127,7 +127,7 @@ impl TaskStatus {
 #[derive(Debug, Clone, Data)]
 struct Task {
     name: String,
-    description: Option<String>,
+    description: String,
     uid: String,
     categories: Vector<String>,
     priority: u32,
@@ -160,7 +160,7 @@ const TASK_FOCUS_COMPLETED: &str = "Completed";
 const TASK_FOCUS_ALL: &str = "All";
 
 impl Task {
-    fn new(name: String, description: Option<String>,
+    fn new(name: String, description: String,
            uid: String, categories: Vector<String>,
            priority: u32, status: TaskStatus, seq: u32,
            time_records: Vector<TimeRecord>) -> Task {
@@ -237,7 +237,7 @@ fn parse_time_records(optsrc: &Option<String>) -> Vector<TimeRecord> {
 
 fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
     let mut summary = String::new();
-    let mut description = None;
+    let mut description = String::new();
     let mut uid = String::new();
     let mut categories = Vector::new();
     let mut priority = 0;
@@ -253,7 +253,7 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
 
             "UID" => {uid = property.value.as_ref().unwrap().clone();}
             "SUMMARY" => {summary = property.value.as_ref().unwrap().clone();}
-            "DESCRIPTION" => {description = property.value.clone();}
+            "DESCRIPTION" => {description = property.value.clone().unwrap_or("".to_string());}
             "CATEGORIES" => {
                 if (property.value.is_some()) {
                     categories.insert(0,  property.value.as_ref().unwrap().clone());
@@ -613,7 +613,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
                 let uid = generate_uid();
-                let task = Task::new("new task".to_string(), None, uid.clone(), Vector::new(),
+                let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), Vector::new(),
                                      0, TaskStatus::NEEDS_ACTION, 0, Vector::new());
 
                 data.0.tasks.insert(uid.clone(), task);
@@ -901,14 +901,7 @@ fn ui_builder() -> impl Widget<AppModel> {
             }
 
             let task = &d.tasks.get(&d.selected_task).expect("unknown uid");
-
-            if let Some(text) = &task.description {
-                return format!("{}", text);
-            }
-            else {
-                return "".to_string();
-            }
-
+            return format!("{}", task.description);
         })
         .padding(10.0)
         .background(TASK_COLOR_BG.clone())
