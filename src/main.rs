@@ -522,6 +522,7 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
     let uid_new = current.clone();
     let uid_edit = current.clone();
     let uid_delete = current.clone();
+    let uid_completed = current.clone();
 
     Menu::empty()
         .entry(
@@ -532,6 +533,13 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
                 .on_activate(
                     move |ctx, data: &mut AppModel, _env| {
                     ctx.submit_command(COMMAND_TASK_EDIT.with(uid_edit.clone()));
+                }),
+        )
+        .entry(
+            MenuItem::new(LocalizedString::new("Mark completed"))
+                .on_activate(
+                    move |ctx, data: &mut AppModel, _env| {
+                    ctx.submit_command(COMMAND_TASK_COMPLETED.with(uid_completed.clone()));
                 }),
         )
         .entry(
@@ -627,6 +635,16 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_EDIT) => {
 
+            },
+            Event::Command(cmd) if cmd.is(COMMAND_TASK_COMPLETED) => {
+                let uid = cmd.get(COMMAND_TASK_COMPLETED).unwrap().clone();
+                let mut task = data.0.tasks.get(&uid).expect("unknown uid").clone();
+                task.status = TaskStatus::COMPLETED;
+                if data.0.tracking.task_uid.eq(&uid) {
+                    stop_tracking(&mut data.0);
+                }
+
+                data.0.tasks = data.0.tasks.update(uid, task);
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_DELETE) => {
                 delete_task(&mut data.0, cmd.get(COMMAND_TASK_DELETE).unwrap());
