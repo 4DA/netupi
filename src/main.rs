@@ -768,13 +768,18 @@ fn task_details_widget() -> impl Widget<Task> {
     let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
     column.add_flex_child(
-        Label::new(|(d): &(Task), _env: &_| {
-            d.name.clone()
-        })
+        EditableLabel::parse()
         .with_font(FONT_CAPTION_DESCR.clone())
         .padding(10.0)
         .background(TASK_COLOR_BG.clone())
-        .fix_height(50.0),
+        .fix_height(50.0)
+            .lens(lens::Identity.map(
+                |d: &Task| d.name.clone(),
+                |d: &mut Task, x: String| {
+                    d.name = x;
+                    d.seq += 1;
+                },
+            )),
         1.0
     );
 
@@ -786,11 +791,10 @@ fn task_details_widget() -> impl Widget<Task> {
         .background(TASK_COLOR_BG.clone())
         .fix_height(50.0)
             .lens(lens::Identity.map(
-                // Expose shared data with children data
                 |d: &Task| d.description.clone(),
                 |d: &mut Task, x: String| {
-                    // If shared data was changed reflect the changes in our AppModel
-                    d.description = x
+                    d.description = x;
+                    d.seq += 1;
                 },
             ))
         ,
