@@ -60,6 +60,9 @@ use uuid::Uuid;
 // chrono
 use chrono::prelude::*;
 
+mod editable_label;
+use crate::editable_label::EditableLabel;
+
 type ImportResult<T> = std::result::Result<T, String>;
 
 fn generate_uid() -> String {
@@ -755,6 +758,64 @@ impl Widget<AppModel> for StatusBar {
     }
 }
 
+fn task_details_widget() -> impl Widget<Task> {
+    static TASK_COLOR_BG: Color = Color::rgb8(127, 0, 127);
+    static FONT_CAPTION_DESCR: FontDescriptor = FontDescriptor::new(FontFamily::SYSTEM_UI);
+
+    let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
+
+    column.add_flex_child(
+        Label::new(|(d): &(Task), _env: &_| {
+            d.name.clone()
+        })
+        .with_font(FONT_CAPTION_DESCR.clone())
+        .padding(10.0)
+        .background(TASK_COLOR_BG.clone())
+        .fix_height(50.0),
+        1.0
+    );
+
+    column.add_spacer(10.0);
+
+    column.add_flex_child(
+        EditableLabel::parse()
+        .padding(10.0)
+        .background(TASK_COLOR_BG.clone())
+        .fix_height(50.0)
+            .lens(lens::Identity.map(
+                // Expose shared data with children data
+                |d: &Task| d.description.clone(),
+                |d: &mut Task, x: String| {
+                    // If shared data was changed reflect the changes in our AppModel
+                    d.description = x
+                },
+            ))
+        ,
+        1.0
+    );
+
+    column.add_spacer(10.0);
+
+    column.add_flex_child(
+        Label::new(|task: &Task, _env: &_| {
+            let mut result = String::new();
+
+            for record in &task.time_records {
+                let new_record = format!("{:?} - {:?}\n", record.from, record.to);
+                result.push_str(&new_record);
+            }
+
+            return result;
+        })
+        .padding(10.0)
+        .background(TASK_COLOR_BG.clone())
+        .fix_height(50.0),
+        1.0
+    );
+
+
+    return column;
+}
 
 fn ui_builder() -> impl Widget<AppModel> {
     let mut root = Flex::column();
@@ -879,57 +940,15 @@ fn ui_builder() -> impl Widget<AppModel> {
     tasks_column.add_spacer(10.0);
 
     tasks_column.add_flex_child(
-        Label::new(|(d): &(AppModel), _env: &_| {
-            if d.selected_task.eq("") {
-                return "".to_string();
-            }
-            d.tasks.get(&d.selected_task).expect("unknown uid").name.clone()
-        })
-        .with_font(FONT_CAPTION_DESCR.clone())
-        .padding(10.0)
-        .background(TASK_COLOR_BG.clone())
-        .fix_height(50.0),
-        1.0
-    );
-
-    tasks_column.add_spacer(10.0);
-
-    tasks_column.add_flex_child(
-        Label::new(|(d): &(AppModel), _env: &_| {
-            if d.selected_task.eq("") {
-                return "".to_string();
-            }
-
-            let task = &d.tasks.get(&d.selected_task).expect("unknown uid");
-            return format!("{}", task.description);
-        })
-        .padding(10.0)
-        .background(TASK_COLOR_BG.clone())
-        .fix_height(50.0),
-        1.0
-    );
-
-    tasks_column.add_spacer(10.0);
-
-    tasks_column.add_flex_child(
-        Label::new(|d: &AppModel, _env: &_| {
-            if d.selected_task.eq("") {
-                return "".to_string();
-            }
-
-            let task = &d.tasks.get(&d.selected_task).expect("unknown uid");
-            let mut result = String::new();
-
-            for record in &task.time_records {
-                let new_record = format!("{:?} - {:?}\n", record.from, record.to);
-                result.push_str(&new_record);
-            }
-
-            return result;
-        })
-        .padding(10.0)
-        .background(TASK_COLOR_BG.clone())
-        .fix_height(50.0),
+        task_details_widget()
+            .lens(lens::Identity.map(
+                // Expose shared data with children data
+                |d: &AppModel| d.tasks.get(&d.selected_task).expect("unknown uid").clone(),
+                |d: &mut AppModel, x: Task| {
+                    // If shared data was changed reflect the changes in our AppModel
+                    d.tasks = d.tasks.update(d.selected_task.clone(), x);
+                },
+            )),
         1.0
     );
 
