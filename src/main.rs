@@ -196,6 +196,15 @@ impl AppModel {
             return focus_ok && tag_ok;
         })
     }
+
+    fn check_update_selected(&mut self) {
+        let filtered: Vector<String> = self.get_uids_filtered().collect();
+
+        // select any task if currently selected is filtered out
+        if !filtered.contains(&self.selected_task) {
+            self.selected_task = filtered.front().unwrap_or(&"".to_string()).clone();
+        }
+    }
 }
 
 fn convert_ts(optstr: Option<String>) -> Vector<String> {
@@ -461,7 +470,7 @@ fn stop_tracking(data: &mut AppModel) {
 
 fn delete_task(model: &mut AppModel, uid: &String) {
     model.tasks.remove(uid);
-    model.selected_task = get_any_task_uid(&model.tasks);
+    model.check_update_selected();
 }
 
 #[allow(unused_assignments)]
@@ -645,6 +654,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 }
 
                 data.0.tasks = data.0.tasks.update(uid, task);
+                data.0.check_update_selected();
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_DELETE) => {
                 delete_task(&mut data.0, cmd.get(COMMAND_TASK_DELETE).unwrap());
@@ -882,11 +892,7 @@ fn ui_builder() -> impl Widget<AppModel> {
             )
             .on_click(|_ctx, (model, what): &mut (AppModel, String), _env| {
                 model.focus_filter = what.clone();
-
-                // select any task if currently selected is filtered out
-                if model.get_uids_filtered().find(|uid| uid.eq(&model.selected_task)).is_none() {
-                    model.selected_task = get_any_task_uid(&model.tasks);
-                }
+                model.check_update_selected();
             })
         }))
         .vertical()
