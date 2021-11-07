@@ -205,6 +205,18 @@ impl AppModel {
             self.selected_task = filtered.front().unwrap_or(&"".to_string()).clone();
         }
     }
+
+    fn update_tags(&mut self) {
+        self.tags.clear();
+
+        for (_, task) in self.tasks.iter() {
+            for tag in &task.categories {
+                self.tags.push_back(tag.clone());
+            }
+        }
+
+        self.tags.sort();
+    }
 }
 
 fn convert_ts(optstr: Option<String>) -> Vector<String> {
@@ -421,7 +433,7 @@ pub fn main() {
     let (tasks, tags) = parse_ical(file_path);
     let selected_task = get_any_task_uid(&tasks);
 
-    let data = AppModel{
+    let mut data = AppModel{
         tasks,
         tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
         focus,
@@ -433,6 +445,9 @@ pub fn main() {
         focus_filter: TASK_FOCUS_CURRENT.to_string(),
         tag_filter: None
     };
+
+    // TODO should be done in ctor
+    data.update_tags();
 
     let main_window = WindowDesc::new(ui_builder())
         .menu(make_menu)
@@ -470,6 +485,7 @@ fn stop_tracking(data: &mut AppModel) {
 
 fn delete_task(model: &mut AppModel, uid: &String) {
     model.tasks.remove(uid);
+    model.update_tags();
     model.check_update_selected();
 }
 
@@ -638,8 +654,9 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), Vector::new(),
                                      0, TaskStatus::NEEDS_ACTION, 0, Vector::new());
 
+                data.0.selected_task = task.uid.clone();
                 data.0.tasks.insert(uid.clone(), task);
-                data.0.selected_task = "".to_string();
+                data.0.update_tags();
                 ctx.request_update();
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_EDIT) => {
