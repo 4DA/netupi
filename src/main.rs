@@ -936,8 +936,6 @@ fn ui_builder() -> impl Widget<AppModel> {
                 Label::new(|item: &(AppModel, String), _env: &_| format!("{}", item.1))
                     .align_vertical(UnitPoint::LEFT)
                     .padding(10.0)
-                    .expand()
-                    .height(30.0)
                     .background(
                         Painter::new(|ctx: &mut PaintCtx, (shared, id): &(AppModel, String), _env| {
                             let bounds = ctx.size().to_rect();
@@ -976,8 +974,6 @@ fn ui_builder() -> impl Widget<AppModel> {
                 Label::new(|item: &(AppModel, String), _env: &_| format!("{}", item.1))
                     .align_vertical(UnitPoint::LEFT)
                     .padding(10.0)
-                    .expand()
-                    .height(30.0)
                     .background(
                         Painter::new(|ctx: &mut PaintCtx, (shared, id): &(AppModel, String), _env| {
                             let bounds = ctx.size().to_rect();
@@ -1014,7 +1010,8 @@ fn ui_builder() -> impl Widget<AppModel> {
         1.0,
     );
 
-    main_row.add_flex_child(focus_column, 0.5);
+    main_row.add_child(focus_column);
+    main_row.add_default_spacer();
 
     let tasks_scroll = Scroll::new(
             TaskListWidget::new()
