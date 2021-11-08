@@ -736,13 +736,24 @@ struct StatusBar {
     timer_id: TimerToken,
 }
 
+fn format_duration(dur: chrono::Duration) -> String {
+    if dur.num_hours() > 0 {
+        format!("{:02}h:{:02}m:{:02}s", dur.num_hours(), dur.num_minutes(), dur.num_seconds())
+    } else if dur.num_minutes() > 0 {
+        format!("{:02}m:{:02}s", dur.num_minutes(), dur.num_seconds())
+    } else {
+        format!("{:02}s", dur.num_seconds())
+    }
+}
+
 fn get_status_string(d: &AppModel) -> String {
     if d.tracking.active {
         let active_task = &d.tasks.get(&d.tracking.task_uid).expect("unknown uid");
         let duration = Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
+        let total = chrono::Duration::from_std(Duration::from_secs(10)).unwrap();
 
-        format!("Active task: '{}' | Elapsed: {:02}h:{:02}m:{:02}s",
-                active_task.name, duration.num_hours(), duration.num_minutes(), duration.num_seconds())
+        format!("Active task: '{}' | Elapsed: {} / {}",
+                active_task.name, format_duration(duration), format_duration(total))
     }
     else {
         if d.selected_task.is_empty() {
