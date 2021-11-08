@@ -825,7 +825,7 @@ fn task_details_widget() -> impl Widget<Task> {
 
     let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
-    column.add_flex_child(
+    column.add_child(
         EditableLabel::parse()
         .with_font(FONT_CAPTION_DESCR.clone())
         .padding(10.0)
@@ -838,12 +838,11 @@ fn task_details_widget() -> impl Widget<Task> {
                     d.seq += 1;
                 },
             )),
-        1.0
     );
 
     column.add_spacer(10.0);
 
-    column.add_flex_child(
+    column.add_child(
         EditableLabel::parse()
         .padding(10.0)
         .background(TASK_COLOR_BG.clone())
@@ -856,12 +855,11 @@ fn task_details_widget() -> impl Widget<Task> {
                 },
             ))
         ,
-        1.0
     );
 
     column.add_spacer(10.0);
 
-    column.add_flex_child(
+    column.add_child(
         Label::new(|task: &Task, _env: &_| {
             let mut result = String::new();
 
@@ -875,7 +873,6 @@ fn task_details_widget() -> impl Widget<Task> {
         .padding(10.0)
         .background(TASK_COLOR_BG.clone())
         .fix_height(50.0),
-        1.0
     );
 
     column.add_default_spacer();
@@ -885,14 +882,13 @@ fn task_details_widget() -> impl Widget<Task> {
                                 .with_weight(FontWeight::BOLD)
                                 .with_size(16.0)));
 
-    column.add_flex_child(
+    column.add_child(
         Flex::row()
             .with_child(Radio::new("needs action" , TaskStatus::NEEDS_ACTION))
             .with_child(Radio::new("in process"   , TaskStatus::IN_PROCESS))
             .with_child(Radio::new("completed"    , TaskStatus::COMPLETED))
             .with_child(Radio::new("cancelled"    , TaskStatus::CANCELLED))
-            .lens(Task::task_status),
-        1.0,
+            .lens(Task::task_status)
     );
 
     // DropdownSelect from widget nursery creates separated window
@@ -1031,7 +1027,7 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     tasks_column.add_spacer(10.0);
 
-    tasks_column.add_flex_child(
+    tasks_column.add_child(
         Maybe::new(
             || task_details_widget().boxed(),
             || SizedBox::empty().expand_width().boxed(),
@@ -1043,7 +1039,6 @@ fn ui_builder() -> impl Widget<AppModel> {
                     x.map(|new_task| d.tasks = d.tasks.update(d.selected_task.clone(), new_task));
                 },
             )),
-        1.0
     );
 
 
