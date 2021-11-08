@@ -24,7 +24,8 @@ use druid::piet::{PietTextLayoutBuilder, TextStorage as PietTextStorage};
 use druid::widget::prelude::*;
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
-use druid::widget::{Button, CrossAxisAlignment, Flex, Label, SizedBox, RawLabel, List, Scroll, Controller, ControllerHost, Container, Painter};
+use druid::widget::{Button, CrossAxisAlignment, Flex, Label, SizedBox, RawLabel, List, Scroll, Controller, ControllerHost, Container, Painter, Radio};
+
 use druid::{
     AppLauncher, Application, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     FontWeight, FontDescriptor, FontFamily, Point,
@@ -61,8 +62,9 @@ use uuid::Uuid;
 use chrono::prelude::*;
 
 mod editable_label;
-mod maybe;
 use crate::editable_label::EditableLabel;
+
+mod maybe;
 use crate::maybe::Maybe;
 
 type ImportResult<T> = std::result::Result<T, String>;
@@ -129,14 +131,14 @@ impl TaskStatus {
     }
 }
 
-#[derive(Debug, Clone, Data)]
+#[derive(Debug, Clone, Data, Lens)]
 struct Task {
     name: String,
     description: String,
     uid: String,
     categories: Vector<String>,
     priority: u32,
-    status: TaskStatus,
+    task_status: TaskStatus,
     seq: u32,
     time_records: Vector<TimeRecord>,
 }
@@ -167,9 +169,9 @@ const TASK_FOCUS_ALL: &str = "All";
 impl Task {
     fn new(name: String, description: String,
            uid: String, categories: Vector<String>,
-           priority: u32, status: TaskStatus, seq: u32,
+           priority: u32, task_status: TaskStatus, seq: u32,
            time_records: Vector<TimeRecord>) -> Task {
-        return Task{name, description, uid, categories, priority, status, seq, time_records};
+        return Task{name, description, uid, categories, priority, task_status, seq, time_records};
     }
 }
 
@@ -179,9 +181,9 @@ impl AppModel {
             let task = self.tasks.get(uid).expect("unknown uid");
 
             let focus_ok = match self.focus_filter.as_str() {
-                TASK_FOCUS_CURRENT => {task.status == TaskStatus::NEEDS_ACTION ||
-                              task.status == TaskStatus::IN_PROCESS},
-                TASK_FOCUS_COMPLETED => task.status == TaskStatus::COMPLETED,
+                TASK_FOCUS_CURRENT => {task.task_status == TaskStatus::NEEDS_ACTION ||
+                              task.task_status == TaskStatus::IN_PROCESS},
+                TASK_FOCUS_COMPLETED => task.task_status == TaskStatus::COMPLETED,
                 TASK_FOCUS_ALL => true,
                 _ => panic!("Unknown focus filter {}", &self.focus_filter),
             };
@@ -608,7 +610,7 @@ impl TaskListWidget {
                 let container = Container::new(
                     Label::new(|(d, uid): &(AppModel, String), _env: &_| {
                         let task = d.tasks.get(uid).expect("unknown uid");
-                        format!("{}[{:?}][{:?}]", task.name, task.status, task.categories)
+                        format!("{}[{:?}][{:?}]", task.name, task.task_status, task.categories)
                     })
                         .expand()
                         .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
@@ -665,7 +667,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::Command(cmd) if cmd.is(COMMAND_TASK_COMPLETED) => {
                 let uid = cmd.get(COMMAND_TASK_COMPLETED).unwrap().clone();
                 let mut task = data.0.tasks.get(&uid).expect("unknown uid").clone();
-                task.status = TaskStatus::COMPLETED;
+                task.task_status = TaskStatus::COMPLETED;
                 if data.0.tracking.task_uid.eq(&uid) {
                     stop_tracking(&mut data.0);
                 }
@@ -876,6 +878,36 @@ fn task_details_widget() -> impl Widget<Task> {
         1.0
     );
 
+    column.add_default_spacer();
+
+    column.add_child(Label::new("Status")
+                     .with_font(FontDescriptor::new(FontFamily::SYSTEM_UI)
+                                .with_weight(FontWeight::BOLD)
+                                .with_size(16.0)));
+
+    column.add_flex_child(
+        Flex::row()
+            .with_child(Radio::new("needs action" , TaskStatus::NEEDS_ACTION))
+            .with_child(Radio::new("in process"   , TaskStatus::IN_PROCESS))
+            .with_child(Radio::new("completed"    , TaskStatus::COMPLETED))
+            .with_child(Radio::new("cancelled"    , TaskStatus::CANCELLED))
+            .lens(Task::task_status),
+        1.0,
+    );
+
+    // DropdownSelect from widget nursery creates separated window
+    // column.add_flex_child(
+    //     DropdownSelect::new(vec![
+    //         ("needs action" , TaskStatus::NEEDS_ACTION),
+    //         ("in process"   , TaskStatus::IN_PROCESS),
+    //         ("completed"    , TaskStatus::COMPLETED),
+    //         ("cancelled"    , TaskStatus::CANCELLED),
+    //     ])
+    //     .align_left()
+    //     .lens(Task::task_status),
+    //     1.0,
+    // );
+
     return column;
 }
 
@@ -1004,7 +1036,7 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     tasks_column.add_flex_child(
         Maybe::new(
-            || task_details_widget().boxed() ,
+            || task_details_widget().boxed(),
             || SizedBox::empty().expand_width().boxed(),
         )
             .lens(lens::Identity.map(
