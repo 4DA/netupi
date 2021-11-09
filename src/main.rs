@@ -610,7 +610,7 @@ impl TaskListWidget {
                 let container = Container::new(
                     Label::new(|(d, uid): &(AppModel, String), _env: &_| {
                         let task = d.tasks.get(uid).expect("unknown uid");
-                        format!("{}[{:?}][{:?}]", task.name, task.task_status, task.categories)
+                        format!("{}", task.name)
                     })
                         .expand()
                         .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
@@ -889,6 +889,38 @@ fn task_details_widget() -> impl Widget<Task> {
             .with_child(Radio::new("completed"    , TaskStatus::COMPLETED))
             .with_child(Radio::new("cancelled"    , TaskStatus::CANCELLED))
             .lens(Task::task_status)
+    );
+
+    column.add_default_spacer();
+
+    column.add_child(Label::new("Tags")
+                     .with_font(FontDescriptor::new(FontFamily::SYSTEM_UI)
+                                .with_weight(FontWeight::BOLD)
+                                .with_size(16.0)));
+
+    column.add_child(
+        Scroll::new(List::new(|| {
+
+            Flex::row()
+                .with_child(
+                    Label::new(|item: &String, _env: &_| format!("{}", item))
+                        .align_horizontal(UnitPoint::LEFT)
+                        .padding(10.0))
+
+                .with_child(
+                    Button::from_label(Label::new("⌫")
+                                       .with_font(FontDescriptor::new(FontFamily::SYSTEM_UI)
+                                                  .with_size(10.0))).on_click(|_ctx, _data, _env| {}))
+                .background(
+                            Painter::new(|ctx: &mut PaintCtx, item: &String, _env| {
+                                let bounds = ctx.size().to_rect();
+                                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                            }))
+
+        })
+          .with_spacing(10.0)
+          .horizontal())
+          .lens(Task::categories)
     );
 
     // DropdownSelect from widget nursery creates separated window
