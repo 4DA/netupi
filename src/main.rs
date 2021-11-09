@@ -1036,6 +1036,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                 |d: &AppModel| d.tasks.get(&d.selected_task).map_or(None, |r| Some(r.clone())),
                 |d: &mut AppModel, x: Option<Task>| {
                     x.map(|new_task| d.tasks = d.tasks.update(d.selected_task.clone(), new_task));
+                    d.check_update_selected();
                 },
             )),
     );
