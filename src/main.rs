@@ -983,15 +983,14 @@ fn ui_builder() -> impl Widget<AppModel> {
                         })
                     )
             )
-                .on_click(|_ctx, (shared, what): &mut (AppModel, String), _env| {
-                    if let Some(ref tf) = shared.tag_filter {
-                        if tf.eq(what) {
-                            shared.tag_filter = None;
-                            return;
-                        }
-                    }
+                .on_click(|_ctx, (data, what): &mut (AppModel, String), _env| {
+                    data.tag_filter = match data.tag_filter {
+                        Some(ref filter) if filter.eq(what) => None,
+                        Some(_)                             => Some(what.clone()),
+                        None                                => Some(what.clone())
+                    };
 
-                    shared.tag_filter = Some(what.clone());
+                    data.check_update_selected();
                 })
         }))
         .vertical()
