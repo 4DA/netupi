@@ -136,7 +136,7 @@ struct Task {
     name: String,
     description: String,
     uid: String,
-    categories: Vector<String>,
+    categories: OrdSet<String>,
     priority: u32,
     task_status: TaskStatus,
     seq: u32,
@@ -168,7 +168,7 @@ const TASK_FOCUS_ALL: &str = "All";
 
 impl Task {
     fn new(name: String, description: String,
-           uid: String, categories: Vector<String>,
+           uid: String, categories: OrdSet<String>,
            priority: u32, task_status: TaskStatus, seq: u32,
            time_records: Vector<TimeRecord>) -> Task {
         return Task{name, description, uid, categories, priority, task_status, seq, time_records};
@@ -267,7 +267,7 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
     let mut summary = String::new();
     let mut description = String::new();
     let mut uid = String::new();
-    let mut categories = Vector::new();
+    let mut categories = OrdSet::new();
     let mut priority = 0;
     let mut status = TaskStatus::NEEDS_ACTION;
     let mut seq = 0;
@@ -284,7 +284,7 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
             "DESCRIPTION" => {description = property.value.clone().unwrap_or("".to_string());}
             "CATEGORIES" => {
                 if (property.value.is_some()) {
-                    categories.insert(0,  property.value.as_ref().unwrap().clone());
+                    categories.insert(property.value.as_ref().unwrap().clone());
                 }
             }
             "STATUS" => {
@@ -653,7 +653,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
                 let uid = generate_uid();
-                let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), Vector::new(),
+                let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), OrdSet::new(),
                                      0, TaskStatus::NEEDS_ACTION, 0, Vector::new());
 
                 data.0.selected_task = task.uid.clone();
@@ -920,7 +920,9 @@ fn task_details_widget() -> impl Widget<Task> {
         })
           .with_spacing(10.0)
           .horizontal())
-          .lens(Task::categories)
+            .lens(lens::Map::new(
+                |data: &Task| data.categories.iter().map(|x: &String| {x.clone()}).collect(),
+                |data: &mut Task, tags: Vector<String>| data.categories = tags.iter().collect()))
     );
 
     // DropdownSelect from widget nursery creates separated window
