@@ -913,16 +913,12 @@ fn task_details_widget() -> impl Widget<Task> {
         List::new(|| {
             Flex::row()
                 .with_child(
-                    Label::new(|item: &String, _env: &_| format!("{}", item))
+                    Label::new(|(_, item) : &(Vector<String>, String), _env: &_| format!("{} ⌫", item))
+                        .on_click(|_ctx, (lst, item): &mut (Vector<String>, String), _env| lst.retain(|v| v != item))
                         .align_horizontal(UnitPoint::LEFT)
                         .padding(10.0))
-
-                .with_child(
-                    Button::from_label(Label::new("⌫")
-                                       .with_font(FontDescriptor::new(FontFamily::SYSTEM_UI)
-                                                  .with_size(10.0))).on_click(|_ctx, _data, _env| {}))
                 .background(
-                    Painter::new(|ctx: &mut PaintCtx, item: &String, _env| {
+                    Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
                         let bounds = ctx.size().to_rect();
                         ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
                     }))
@@ -930,9 +926,15 @@ fn task_details_widget() -> impl Widget<Task> {
         })
         .with_spacing(10.0)
         .horizontal()
-        .lens(lens::Map::new(
-            |data: &Task| data.categories.iter().map(|x: &String| {x.clone()}).collect(),
-            |data: &mut Task, tags: Vector<String>| data.categories = tags.iter().collect()));
+        .lens(lens::Identity.map(
+            |data: &Task| {
+                (data.categories.iter().map(|x: &String| {x.clone()}).collect(),
+                 data.categories.iter().map(|x: &String| {x.clone()}).collect())
+            },
+            |data: &mut Task, tags: (Vector<String>, Vector<String>)| {
+                data.categories = tags.0.iter().collect();
+                data.seq += 1;
+            }));
 
     column.add_child(
         Flex::row()
