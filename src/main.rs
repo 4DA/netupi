@@ -136,7 +136,7 @@ struct Task {
     name: String,
     description: String,
     uid: String,
-    categories: OrdSet<String>,
+    tags: OrdSet<String>,
     priority: u32,
     task_status: TaskStatus,
     seq: u32,
@@ -168,10 +168,10 @@ const TASK_FOCUS_ALL: &str = "All";
 
 impl Task {
     fn new(name: String, description: String,
-           uid: String, categories: OrdSet<String>,
+           uid: String, tags: OrdSet<String>,
            priority: u32, task_status: TaskStatus, seq: u32,
            time_records: Vector<TimeRecord>) -> Task {
-        return Task{name, description, uid, categories, priority, task_status, seq, time_records};
+        return Task{name, description, uid, tags, priority, task_status, seq, time_records};
     }
 }
 
@@ -190,7 +190,7 @@ impl AppModel {
 
             let tag_ok =
                 if let Some(ref tag_filter) = self.tag_filter {
-                    task.categories.contains(tag_filter)
+                    task.tags.contains(tag_filter)
                 } else {
                     true
                 };
@@ -212,7 +212,7 @@ impl AppModel {
         self.tags.clear();
 
         for (_, task) in self.tasks.iter() {
-            for tag in &task.categories {
+            for tag in &task.tags {
                 self.tags.push_back(tag.clone());
             }
         }
@@ -267,7 +267,7 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
     let mut summary = String::new();
     let mut description = String::new();
     let mut uid = String::new();
-    let mut categories = OrdSet::new();
+    let mut tags = OrdSet::new();
     let mut priority = 0;
     let mut status = TaskStatus::NEEDS_ACTION;
     let mut seq = 0;
@@ -284,7 +284,7 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
             "DESCRIPTION" => {description = property.value.clone().unwrap_or("".to_string());}
             "CATEGORIES" => {
                 if (property.value.is_some()) {
-                    categories.insert(property.value.as_ref().unwrap().clone());
+                    tags.insert(property.value.as_ref().unwrap().clone());
                 }
             }
             "STATUS" => {
@@ -321,7 +321,7 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
         }
     }
 
-    return Ok(Task::new(summary, description, uid, categories, priority, status, seq, time_records));
+    return Ok(Task::new(summary, description, uid, tags, priority, status, seq, time_records));
 }
 
 fn parse_ical(file_path: String) -> (TaskMap, OrdSet<String>) {
@@ -343,7 +343,7 @@ fn parse_ical(file_path: String) -> (TaskMap, OrdSet<String>) {
     for ical_todo in &ical.todos {
         let task = parse_todo(ical_todo).unwrap();
 
-        for tag in &task.categories {
+        for tag in &task.tags {
             tags.insert(tag.clone());
         }
 
@@ -905,7 +905,7 @@ fn task_details_widget() -> impl Widget<Task> {
                 |_task: &Task| "".to_string(),
                 |task: &mut Task, new_tag| {
                     if !new_tag.is_empty() {
-                        task.categories = task.categories.update(new_tag);
+                        task.tags = task.tags.update(new_tag);
                     }
                 }));
 
@@ -928,11 +928,11 @@ fn task_details_widget() -> impl Widget<Task> {
         .horizontal()
         .lens(lens::Identity.map(
             |data: &Task| {
-                (data.categories.iter().map(|x: &String| {x.clone()}).collect(),
-                 data.categories.iter().map(|x: &String| {x.clone()}).collect())
+                (data.tags.iter().map(|x: &String| {x.clone()}).collect(),
+                 data.tags.iter().map(|x: &String| {x.clone()}).collect())
             },
             |data: &mut Task, tags: (Vector<String>, Vector<String>)| {
-                data.categories = tags.0.iter().collect();
+                data.tags = tags.0.iter().collect();
                 data.seq += 1;
             }));
 
