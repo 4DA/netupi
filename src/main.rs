@@ -888,7 +888,9 @@ fn task_details_widget() -> impl Widget<Task> {
             .with_child(Radio::new("in process"   , TaskStatus::IN_PROCESS))
             .with_child(Radio::new("completed"    , TaskStatus::COMPLETED))
             .with_child(Radio::new("cancelled"    , TaskStatus::CANCELLED))
-            .lens(Task::task_status)
+            .lens(lens::Map::new(
+                |task: &Task| task.task_status.clone(),
+                |task: &mut Task, status| {task.task_status = status; task.seq += 1;}))
     );
 
     column.add_default_spacer();
