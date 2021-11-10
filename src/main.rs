@@ -24,7 +24,7 @@ use druid::piet::{PietTextLayoutBuilder, TextStorage as PietTextStorage};
 use druid::widget::prelude::*;
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use druid::lens::{self, LensExt};
-use druid::widget::{Button, CrossAxisAlignment, Flex, Label, SizedBox, RawLabel, List, Scroll, Controller, ControllerHost, Container, Painter, Radio};
+use druid::widget::{Button, CrossAxisAlignment, Flex, Label, SizedBox, RawLabel, List, Scroll, Controller, ControllerHost, Container, Painter, Radio, TextBox};
 
 use druid::{
     AppLauncher, Application, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
@@ -900,9 +900,17 @@ fn task_details_widget() -> impl Widget<Task> {
                                 .with_weight(FontWeight::BOLD)
                                 .with_size(16.0)));
 
-    column.add_child(
-        Scroll::new(List::new(|| {
+    let new_tag_edit = EditableLabel::parse()
+            .lens(lens::Map::new(
+                |_task: &Task| "".to_string(),
+                |task: &mut Task, new_tag| {
+                    if !new_tag.is_empty() {
+                        task.categories = task.categories.update(new_tag);
+                    }
+                }));
 
+    let tags_list =
+        List::new(|| {
             Flex::row()
                 .with_child(
                     Label::new(|item: &String, _env: &_| format!("{}", item))
@@ -914,18 +922,26 @@ fn task_details_widget() -> impl Widget<Task> {
                                        .with_font(FontDescriptor::new(FontFamily::SYSTEM_UI)
                                                   .with_size(10.0))).on_click(|_ctx, _data, _env| {}))
                 .background(
-                            Painter::new(|ctx: &mut PaintCtx, item: &String, _env| {
-                                let bounds = ctx.size().to_rect();
-                                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                            }))
+                    Painter::new(|ctx: &mut PaintCtx, item: &String, _env| {
+                        let bounds = ctx.size().to_rect();
+                        ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                    }))
 
         })
-          .with_spacing(10.0)
-          .horizontal())
-            .lens(lens::Map::new(
-                |data: &Task| data.categories.iter().map(|x: &String| {x.clone()}).collect(),
-                |data: &mut Task, tags: Vector<String>| data.categories = tags.iter().collect()))
-    );
+        .with_spacing(10.0)
+        .horizontal()
+        .lens(lens::Map::new(
+            |data: &Task| data.categories.iter().map(|x: &String| {x.clone()}).collect(),
+            |data: &mut Task, tags: Vector<String>| data.categories = tags.iter().collect()));
+
+    column.add_child(
+        Flex::row()
+            .with_child(new_tag_edit)
+            .with_default_spacer()
+            .with_child(
+                Scroll::new(tags_list)
+
+            ));
 
     // DropdownSelect from widget nursery creates separated window
     // column.add_flex_child(
