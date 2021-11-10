@@ -102,7 +102,7 @@ struct ViewState {
 #[derive(Clone, Data, Lens)]
 struct AppModel {
     tasks: TaskMap,
-    tags: Vector<String>,
+    tags: OrdSet<String>,
     focus: Vector<String>,
     tracking: TrackingState,
     view: ViewState,
@@ -213,11 +213,9 @@ impl AppModel {
 
         for (_, task) in self.tasks.iter() {
             for tag in &task.tags {
-                self.tags.push_back(tag.clone());
+                self.tags.insert(tag.clone());
             }
         }
-
-        self.tags.sort();
     }
 }
 
@@ -437,7 +435,7 @@ pub fn main() {
 
     let mut data = AppModel{
         tasks,
-        tags: tags.iter().map(|x : &String| {x.clone()}).collect(),
+        tags,
         focus,
         tracking: TrackingState{active: false, task_uid: "".to_string(),
                                 timestamp: Rc::new(Utc::now()),
@@ -1050,7 +1048,7 @@ fn ui_builder() -> impl Widget<AppModel> {
         .vertical()
         .lens(lens::Identity.map(
             // Expose shared data with children data
-            |d: &AppModel| (d.clone(), d.tags.clone()),
+            |d: &AppModel| (d.clone(), d.tags.iter().map(|x : &String| {x.clone()}).collect()),
             |d: &mut AppModel, x: (AppModel, Vector<String>)| {
                 // If shared data was changed reflect the changes in our AppModel
                 *d = x.0
@@ -1091,6 +1089,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                 |d: &mut AppModel, x: Option<Task>| {
                     x.map(|new_task| d.tasks = d.tasks.update(d.selected_task.clone(), new_task));
                     d.check_update_selected();
+                    d.update_tags();
                 },
             )),
     );
