@@ -819,69 +819,36 @@ impl Widget<AppModel> for StatusBar {
 
 fn task_details_widget() -> impl Widget<Task> {
     static TASK_COLOR_BG: Color = Color::rgb8(127, 0, 127);
-    static FONT_CAPTION_DESCR: FontDescriptor = FontDescriptor::new(FontFamily::SYSTEM_UI);
+    static FONT_CAPTION_DESCR: FontDescriptor =
+        FontDescriptor::new(FontFamily::SYSTEM_UI)
+        .with_weight(FontWeight::BOLD)
+        .with_size(16.0);
 
     let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
     column.add_child(
-        EditableLabel::parse()
-        .with_font(FONT_CAPTION_DESCR.clone())
-        .padding(10.0)
-        .background(TASK_COLOR_BG.clone())
-        .fix_height(50.0)
-            .lens(lens::Identity.map(
-                |d: &Task| d.name.clone(),
-                |d: &mut Task, x: String| {
-                    d.name = x;
-                    d.seq += 1;
-                },
-            )),
+        Flex::row()
+            .with_child(Label::new("Name").with_font(FONT_CAPTION_DESCR.clone()))
+            .with_default_spacer()
+            .with_child(
+                EditableLabel::parse()
+                    .padding(10.0)
+                    .fix_height(50.0)
+                    .lens(lens::Identity.map(
+                        |d: &Task| d.name.clone(),
+                        |d: &mut Task, x: String| {
+                            d.name = x;
+                            d.seq += 1;
+                        },
+                    ))),
     );
 
     column.add_spacer(10.0);
-
-    column.add_child(
-        EditableLabel::parse()
-        .padding(10.0)
-        .background(TASK_COLOR_BG.clone())
-        .fix_height(50.0)
-            .lens(lens::Identity.map(
-                |d: &Task| d.description.clone(),
-                |d: &mut Task, x: String| {
-                    d.description = x;
-                    d.seq += 1;
-                },
-            ))
-        ,
-    );
-
-    column.add_spacer(10.0);
-
-    column.add_child(
-        Label::new(|task: &Task, _env: &_| {
-            let mut result = String::new();
-
-            for record in &task.time_records {
-                let new_record = format!("{:?} - {:?}\n", record.from, record.to);
-                result.push_str(&new_record);
-            }
-
-            return result;
-        })
-        .padding(10.0)
-        .background(TASK_COLOR_BG.clone())
-        .fix_height(50.0),
-    );
-
-    column.add_default_spacer();
-
-    column.add_child(Label::new("Status")
-                     .with_font(FontDescriptor::new(FontFamily::SYSTEM_UI)
-                                .with_weight(FontWeight::BOLD)
-                                .with_size(16.0)));
 
     column.add_child(
         Flex::row()
+            .with_child(Label::new("Status") .with_font(FONT_CAPTION_DESCR.clone()))
+            .with_default_spacer()
             .with_child(Radio::new("needs action" , TaskStatus::NEEDS_ACTION))
             .with_child(Radio::new("in process"   , TaskStatus::IN_PROCESS))
             .with_child(Radio::new("completed"    , TaskStatus::COMPLETED))
@@ -891,12 +858,7 @@ fn task_details_widget() -> impl Widget<Task> {
                 |task: &mut Task, status| {task.task_status = status; task.seq += 1;}))
     );
 
-    column.add_default_spacer();
-
-    column.add_child(Label::new("Tags")
-                     .with_font(FontDescriptor::new(FontFamily::SYSTEM_UI)
-                                .with_weight(FontWeight::BOLD)
-                                .with_size(16.0)));
+    column.add_spacer(15.0);
 
     let new_tag_edit = EditableLabel::parse()
             .lens(lens::Map::new(
@@ -936,12 +898,54 @@ fn task_details_widget() -> impl Widget<Task> {
 
     column.add_child(
         Flex::row()
-            .with_child(new_tag_edit)
+            .with_child(Label::new("Tags").with_font(FONT_CAPTION_DESCR.clone()))
+            .with_spacer(20.0)
+            .with_child(new_tag_edit.padding(10.0))
             .with_default_spacer()
             .with_child(
                 Scroll::new(tags_list)
 
             ));
+
+    column.add_spacer(15.0);
+
+    column.add_child(Label::new("Description").with_font(FONT_CAPTION_DESCR.clone()));
+    column.add_child(
+        EditableLabel::parse()
+            .lens(lens::Identity.map(
+                |d: &Task| d.description.clone(),
+                |d: &mut Task, x: String| {
+                    d.description = x;
+                    d.seq += 1;
+                },
+            ))
+            .padding(10.0)
+        ,
+    );
+
+    column.add_spacer(15.0);
+
+    column.add_child(Label::new("Task time log").with_font(FONT_CAPTION_DESCR.clone()));
+    column.add_default_spacer();
+    column.add_child(
+        Label::new(|task: &Task, _env: &_| {
+            let mut result = String::new();
+
+            for record in &task.time_records {
+                let new_record = format!("{:?} - {:?}\n", record.from, record.to);
+                result.push_str(&new_record);
+            }
+
+            return result;
+        })
+        .padding(10.0)
+        .background(
+            Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
+                let bounds = ctx.size().to_rect();
+                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+            }))
+    );
+
 
     // DropdownSelect from widget nursery creates separated window
     // column.add_flex_child(
