@@ -54,6 +54,8 @@ use std::env;
 use uuid::v1::{Timestamp, Context};
 use uuid::Uuid;
 
+use anyhow::{anyhow};
+
 // chrono
 use chrono::prelude::*;
 
@@ -68,6 +70,9 @@ use task::*;
 
 mod icalendar;
 use icalendar::parse_ical;
+
+mod db;
+use db::*;
 
 fn generate_uid() -> String {
     let context = Context::new(42);
@@ -206,7 +211,7 @@ fn play_sound(file: String) {
     });
 }
 
-pub fn main() {
+pub fn main() -> anyhow::Result<()> {
 
     let args: Vec<String> = env::args().collect();
 
@@ -217,13 +222,7 @@ pub fn main() {
         _ => args[1].clone(),
     };
 
-    const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
-
-    // "NEEDS-ACTION" ;Indicates to-do needs action.
-    // "COMPLETED"    ;Indicates to-do completed.
-    // "IN-PROCESS"   ;Indicates to-do in process of.
-    // "CANCELLED"    ;Indicates to-do was cancelled.
-    // https://www.kanzaki.com/docs/ical/status.html
+    let conn = db::init()?;
 
     let focus = vector![TASK_FOCUS_CURRENT.to_string(),
                         TASK_FOCUS_COMPLETED.to_string(),
@@ -256,6 +255,8 @@ pub fn main() {
         .log_to_console()
         .launch(data)
         .expect("launch failed");
+
+    Ok(())
 }
 
 fn start_tracking(data: &mut AppModel, uid: String) {

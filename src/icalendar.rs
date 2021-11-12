@@ -1,3 +1,11 @@
+// icalendar task statuses
+// "NEEDS-ACTION" ;Indicates to-do needs action.
+// "COMPLETED"    ;Indicates to-do completed.
+// "IN-PROCESS"   ;Indicates to-do in process of.
+// "CANCELLED"    ;Indicates to-do was cancelled.
+// https://www.kanzaki.com/docs/ical/status.html
+
+
 use std::io::BufReader;
 use std::fs::File;
 use std::fs;
