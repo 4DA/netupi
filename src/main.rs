@@ -35,19 +35,15 @@ use druid::{
 
 use rodio::{Decoder, OutputStream, source::Source, Sink};
 
-// ical stuff
-extern crate ical;
-use ical::generator;
-use crate::ical::{generator::*, *, parser::*};
-use ical::parser::ical::component::IcalTodo;
-use ical::parser::ical::component::IcalAlarm;
-
 // std stuff
 use std::io::BufReader;
 use std::fs::File;
-use std::any::type_name;
-use std::rc::Rc;
 use std::fs;
+use std::rc::Rc;
+
+use std::any::type_name;
+
+
 use std::time::Instant;
 use std::time::SystemTime;
 use std::thread;
@@ -67,7 +63,11 @@ use crate::editable_label::EditableLabel;
 mod maybe;
 use crate::maybe::Maybe;
 
-type ImportResult<T> = std::result::Result<T, String>;
+mod task;
+use task::*;
+
+mod icalendar;
+use icalendar::parse_ical;
 
 fn generate_uid() -> String {
     let context = Context::new(42);
@@ -81,9 +81,6 @@ fn type_of<T>(_: T) -> &'static str {
     type_name::<T>()
 }
 
-type PropertyMap = HashMap<String, Rc<Property>>;
-
-type TaskMap = HashMap<String, Task>;
 
 #[derive(Debug, Clone, Data)]
 struct TrackingState {
@@ -111,43 +108,6 @@ struct AppModel {
     tag_filter: Option<String>,
 }
 
-#[derive(Debug, Clone, Data, PartialEq)]
-enum TaskStatus {
-    NEEDS_ACTION,
-    COMPLETED,
-    IN_PROCESS,
-    CANCELLED
-}
-
-impl TaskStatus {
-    fn to_string(&self) -> &str {
-        match &self {
-            TaskStatus::NEEDS_ACTION => "Needs action",
-            TaskStatus::COMPLETED    => "Completed",
-            TaskStatus::IN_PROCESS   => "In process",
-            TaskStatus::CANCELLED    => "Cancelled",
-            _ => {panic!("Unknown status {:?}", self);}
-        }
-    }
-}
-
-#[derive(Debug, Clone, Data, Lens)]
-struct Task {
-    name: String,
-    description: String,
-    uid: String,
-    tags: OrdSet<String>,
-    priority: u32,
-    task_status: TaskStatus,
-    seq: u32,
-    time_records: Vector<TimeRecord>,
-}
-
-#[derive(Debug, Clone, Data)]
-struct TimeRecord {
-    from: Rc<DateTime<Utc>>,
-    to: Rc<DateTime<Utc>>,
-}
 
 static TIMER_INTERVAL: Duration = Duration::from_secs(10);
 static UI_TIMER_INTERVAL: Duration = Duration::from_secs(1);
@@ -166,14 +126,6 @@ const TASK_FOCUS_CURRENT: &str = "Current";
 const TASK_FOCUS_COMPLETED: &str = "Completed";
 const TASK_FOCUS_ALL: &str = "All";
 
-impl Task {
-    fn new(name: String, description: String,
-           uid: String, tags: OrdSet<String>,
-           priority: u32, task_status: TaskStatus, seq: u32,
-           time_records: Vector<TimeRecord>) -> Task {
-        return Task{name, description, uid, tags, priority, task_status, seq, time_records};
-    }
-}
 
 impl AppModel {
     fn get_uids_filtered(&self) -> impl Iterator<Item = String> + '_ {
@@ -226,164 +178,11 @@ fn convert_ts(optstr: Option<String>) -> Vector<String> {
     }
 }
 
-fn props_by_name(prop_vec: &Vec<Property>) -> PropertyMap {
-    let mut result = PropertyMap::new();
-
-    for p in prop_vec {
-        result.insert(p.name.clone(), Rc::new(p.clone()));
-    }
-
-    return result;
-}
-
-// fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> TodoMap {
-//     let mut result = TodoMap::new();
-
-//     for task in todo_vec {
-//         let properties = props_by_name(&task.properties);
-
-//         result.insert(properties.get("UID").unwrap().value.clone().unwrap(),
-//                       TrackerTodo{properties, alarms: Vector::new()});
-//     }
-
-//     return result;
-// }
-
-fn parse_time_records(optsrc: &Option<String>) -> Vector<TimeRecord> {
-    let mut result = Vector::new();
-
-    let split = optsrc.as_ref().unwrap().split(";");
-
-    for s in split {
-        let res = Utc.datetime_from_str(&s, "%Y-%m-%d %H:%M:%S");
-    }
-
-    return result;
-}
-
-fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
-    let mut summary = String::new();
-    let mut description = String::new();
-    let mut uid = String::new();
-    let mut tags = OrdSet::new();
-    let mut priority = 0;
-    let mut status = TaskStatus::NEEDS_ACTION;
-    let mut seq = 0;
-    let mut time_records = Vector::new();
-
-    for property in &ical_todo.properties {
-        // println!("{}", property);
-        // println!("{}", type_of(&property));
-
-        match property.name.as_ref() {
-
-            "UID" => {uid = property.value.as_ref().unwrap().clone();}
-            "SUMMARY" => {summary = property.value.as_ref().unwrap().clone();}
-            "DESCRIPTION" => {description = property.value.clone().unwrap_or("".to_string());}
-            "CATEGORIES" => {
-                if (property.value.is_some()) {
-                    tags.insert(property.value.as_ref().unwrap().clone());
-                }
-            }
-            "STATUS" => {
-                status = if let Some(ref sta) = property.value {
-                    match sta.as_str() {
-                        "NEEDS-ACTION" => TaskStatus::NEEDS_ACTION,
-                        "COMPLETED" => TaskStatus::COMPLETED,
-                        "IN-PROCESS" => TaskStatus::IN_PROCESS,
-                        "CANCELLED" => TaskStatus::CANCELLED,
-                        _ => {panic!("Unknown status {}", sta);
-                              TaskStatus::NEEDS_ACTION}
-                    }
-                } else {
-                    TaskStatus::NEEDS_ACTION
-                };
-            }
-            "PRIORITY" => {
-                if (property.value.is_some()) {
-                    priority = property.value.as_ref().unwrap().parse::<u32>().unwrap();
-                }
-            }
-            "SEQUENCE" => {
-                if (property.value.is_some()) {
-                    seq = property.value.as_ref().unwrap().parse::<u32>().unwrap();
-                }
-            },
-            "TIME_RECORDS" => {
-                if (property.value.is_some()) {
-                    time_records =
-                        parse_time_records(&property.value);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    return Ok(Task::new(summary, description, uid, tags, priority, status, seq, time_records));
-}
-
-fn parse_ical(file_path: String) -> (TaskMap, OrdSet<String>) {
-    let buf = BufReader::new(File::open(file_path)
-        .unwrap());
-
-    let mut reader = ical::IcalParser::new(buf);
-
-    let mut tags = OrdSet::new();
-
-    let ical = reader.next().unwrap().unwrap();
-
-    // let tracker_todos = todos_by_uid(&ical.todos);
-    // println!("todos: {:?}", tracker_todos);
-
-    let mut task_map = TaskMap::new();
-
-
-    for ical_todo in &ical.todos {
-        let task = parse_todo(ical_todo).unwrap();
-
-        for tag in &task.tags {
-            tags.insert(tag.clone());
-        }
-
-        task_map.insert(task.uid.clone(), task);
-    }
-
-
-    // let tags = vector![String::from("computer"), String::from("outside")];
-
-    return (task_map, tags);
-}
-
-// fn update_ical(src: &IcalCalendar, todo_map: &TaskMap) -> IcalCalendar {
-//     let mut ical = src.clone();
-
-//     ical.todos.clear();
-//     for (uid, todo) in todo_map {
-//         let mut ical_props = Vec::<Property>::new();
-//         let mut ical_alarms = Vec::<IcalAlarm>::new();
-
-//         for (name, task) in &todo.properties {
-//             ical_props.insert(0, Property::clone(task));
-//         }
-
-//         for alarm in &todo.alarms {
-//             ical_alarms.insert(0, IcalAlarm::clone(alarm));
-//         }
-
-//         ical.todos.insert(0, IcalTodo{properties: ical_props, alarms: ical_alarms});
-//     }
-//     return ical
-// }
-
 fn get_any_task_uid(tasks: &TaskMap) -> String {
     let null_uid = "".to_string();
     tasks.keys().nth(0).unwrap_or(&null_uid).clone()
 }
 
-fn emit(cal: &IcalCalendar) {
-    let generated = cal.generate();
-    fs::write("/home/dc/Tasks-generated.ics", generated).expect("Unable to write Tasks-generated.ics");
-}
 
 fn play_sound(file: String) {
     thread::spawn(move || {
