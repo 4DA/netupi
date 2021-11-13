@@ -103,6 +103,7 @@ struct ViewState {
 
 #[derive(Clone, Data, Lens)]
 struct AppModel {
+    db: Rc<rusqlite::Connection>,
     tasks: TaskMap,
     tags: OrdSet<String>,
     focus: Vector<String>,
@@ -215,14 +216,14 @@ pub fn main() -> anyhow::Result<()> {
 
     let args: Vec<String> = env::args().collect();
 
+    let conn = db::init()?;
+
     let file_path = match args.len() {
         // no arguments passed
         1 => String::from("/home/dc/Tasks.ics"),
         2 => args[1].clone(),
         _ => args[1].clone(),
     };
-
-    let conn = db::init()?;
 
     let focus = vector![TASK_FOCUS_CURRENT.to_string(),
                         TASK_FOCUS_COMPLETED.to_string(),
@@ -232,6 +233,7 @@ pub fn main() -> anyhow::Result<()> {
     let selected_task = get_any_task_uid(&tasks);
 
     let mut data = AppModel{
+        db: Rc::new(conn),
         tasks,
         tags,
         focus,
@@ -454,6 +456,10 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), OrdSet::new(),
                                      0, TaskStatus::NEEDS_ACTION, 0, Vector::new());
 
+                if let Err(what) = db::add_task(data.0.db.clone(), &task) {
+                    println!("db error: {}", what);
+                }
+
                 data.0.selected_task = task.uid.clone();
                 data.0.tasks.insert(uid.clone(), task);
                 data.0.update_tags();
@@ -523,7 +529,6 @@ impl<W: Widget<(AppModel, String)>> Controller<(AppModel, String), W> for Contex
     ) {
         match event {
             Event::MouseDown(ref mouse) if mouse.button.is_right() => {
-                println!("mouse down");
                 ctx.show_context_menu(make_task_context_menu(&data.0, &data.1), mouse.pos);
             }
             _ => child.event(ctx, event, data, env),
@@ -638,7 +643,6 @@ fn task_details_widget() -> impl Widget<Task> {
                         |d: &Task| d.name.clone(),
                         |d: &mut Task, x: String| {
                             d.name = x;
-                            d.seq += 1;
                         },
                     ))),
     );
@@ -655,7 +659,7 @@ fn task_details_widget() -> impl Widget<Task> {
             .with_child(Radio::new("cancelled"    , TaskStatus::CANCELLED))
             .lens(lens::Map::new(
                 |task: &Task| task.task_status.clone(),
-                |task: &mut Task, status| {task.task_status = status; task.seq += 1;}))
+                |task: &mut Task, status| task.task_status = status))
     );
 
     column.add_spacer(15.0);
@@ -673,8 +677,8 @@ fn task_details_widget() -> impl Widget<Task> {
         List::new(|| {
             Flex::row()
                 .with_child(
-                    Label::new(|(_, item) : &(Vector<String>, String), _env: &_| format!("{} ⌫", item))
-                        .on_click(|_ctx, (lst, item): &mut (Vector<String>, String), _env| lst.retain(|v| v != item))
+                    Label::new(|(_, item) : &(OrdSet<String>, String), _env: &_| format!("{} ⌫", item))
+                        .on_click(|_ctx, (lst, item): &mut (OrdSet<String>, String), _env| *lst = lst.without(item))
                         .align_horizontal(UnitPoint::LEFT)
                         .padding(10.0))
                 .background(
@@ -688,12 +692,13 @@ fn task_details_widget() -> impl Widget<Task> {
         .horizontal()
         .lens(lens::Identity.map(
             |data: &Task| {
-                (data.tags.iter().map(|x: &String| {x.clone()}).collect(),
+                (data.tags.clone(),
                  data.tags.iter().map(|x: &String| {x.clone()}).collect())
             },
-            |data: &mut Task, tags: (Vector<String>, Vector<String>)| {
-                data.tags = tags.0.iter().collect();
-                data.seq += 1;
+            |data: &mut Task, tags: (OrdSet<String>, Vector<String>)| {
+                if !data.tags.same(&tags.0) {
+                    data.tags = tags.0;
+                }
             }));
 
     column.add_child(
@@ -716,7 +721,6 @@ fn task_details_widget() -> impl Widget<Task> {
                 |d: &Task| d.description.clone(),
                 |d: &mut Task, x: String| {
                     d.description = x;
-                    d.seq += 1;
                 },
             ))
             .padding(10.0)
@@ -891,9 +895,21 @@ fn ui_builder() -> impl Widget<AppModel> {
                 // Expose shared data with children data
                 |d: &AppModel| d.tasks.get(&d.selected_task).map_or(None, |r| Some(r.clone())),
                 |d: &mut AppModel, x: Option<Task>| {
-                    x.map(|new_task| d.tasks = d.tasks.update(d.selected_task.clone(), new_task));
-                    d.check_update_selected();
-                    d.update_tags();
+                    if let Some(mut new_task) = x {
+                        if let Some(prev) = d.tasks.get(&d.selected_task) {
+                            if !prev.same(&new_task) {
+                                if let Err(what) = db::update_task(d.db.clone(), &new_task) {
+                                    println!("db error: {}", what);
+                                }
+
+                                new_task.seq += 1;
+
+                                d.tasks = d.tasks.update(d.selected_task.clone(), new_task);
+                                d.check_update_selected();
+                                d.update_tags();
+                            }
+                        }
+                    }
                 },
             )),
     );

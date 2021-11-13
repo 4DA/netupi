@@ -3,10 +3,12 @@ use druid::lens::{self, LensExt};
 use druid::{Data, Lens};
 use chrono::prelude::*;
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
+use serde::{Serialize, Serializer, Deserialize};
+use serde::ser::{SerializeSeq, SerializeMap};
 
 pub type TaskMap = HashMap<String, Task>;
 
-#[derive(Debug, Clone, Data, PartialEq)]
+#[derive(Debug, Clone, Data, PartialEq, Serialize, Deserialize)]
 pub enum TaskStatus {
     NEEDS_ACTION,
     COMPLETED,
@@ -50,5 +52,30 @@ impl Task {
            priority: u32, task_status: TaskStatus, seq: u32,
            time_records: Vector<TimeRecord>) -> Task {
         return Task{name, description, uid, tags, priority, task_status, seq, time_records};
+    }
+}
+
+pub struct Wrapper{
+    inner: OrdSet<String>
+}
+
+impl Wrapper {
+    pub fn new(os: &OrdSet<String>) -> Wrapper {
+        return Wrapper{inner: os.clone()};
+    }
+}
+
+impl Serialize for Wrapper
+where
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.inner.len()))?;
+        for e in &self.inner {
+            seq.serialize_element(&e)?;
+        }
+        seq.end()
     }
 }
