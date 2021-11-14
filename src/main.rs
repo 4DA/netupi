@@ -217,6 +217,7 @@ pub fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
 
     let conn = db::init()?;
+    let db = Rc::new(conn);
 
     let file_path = match args.len() {
         // no arguments passed
@@ -229,11 +230,13 @@ pub fn main() -> anyhow::Result<()> {
                         TASK_FOCUS_COMPLETED.to_string(),
                         TASK_FOCUS_ALL.to_string()];
 
-    let (tasks, tags) = parse_ical(file_path);
+    // let (tasks, tags) = parse_ical(file_path);
+
+    let (tasks, tags) = db::get_tasks(db.clone())?;
     let selected_task = get_any_task_uid(&tasks);
 
     let mut data = AppModel{
-        db: Rc::new(conn),
+        db,
         tasks,
         tags,
         focus,

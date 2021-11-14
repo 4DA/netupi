@@ -101,3 +101,47 @@ pub fn delete_task(conn: Rc<Connection>, uid: &String) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+pub fn get_tasks(conn: Rc<Connection>) -> anyhow::Result<(TaskMap, TagSet)>
+{
+    let mut stmt = conn.prepare(
+        "SELECT * FROM tasks;",
+    )?;
+
+    let sqtasks = stmt.query_map(NO_PARAMS, |row| {
+        let stat_str: String = row.get(5)?;
+        let tag_str: String = row.get(3)?;
+        let arr = serde_json::from_str::<Vec<String>>(&tag_str).unwrap();
+        let mut tag_set = OrdSet::new();
+
+        for x in arr {
+            tag_set = tag_set.update(x);
+        }
+
+        Ok(Task {
+            name         : row.get(1)?,
+            description  : row.get(2)?,
+            uid          : row.get(0)?,
+            tags         : tag_set,
+            priority     : row.get::<usize, u32>(4)?,
+            task_status  : serde_json::from_str::<TaskStatus>(&stat_str).unwrap(),
+            seq          : row.get::<usize, u32>(6)?,
+            time_records : Vector::new()
+        })
+    })?;
+
+    let mut tasks = TaskMap::new();
+    let mut tags = TagSet::new();
+
+    for x in sqtasks {
+        x.map(|t| {
+            for tag in &t.tags {
+                tags.insert(tag.clone());
+            }
+
+            tasks = tasks.update(t.uid.clone(), t);
+        });
+    }
+
+    Ok((tasks, tags))
+}

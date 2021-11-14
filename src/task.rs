@@ -6,6 +6,7 @@ use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use serde::{Serialize, Serializer, Deserialize};
 use serde::ser::{SerializeSeq, SerializeMap};
 
+pub type TagSet = OrdSet<String>;
 pub type TaskMap = HashMap<String, Task>;
 
 #[derive(Debug, Clone, Data, PartialEq, Serialize, Deserialize)]
@@ -33,7 +34,7 @@ pub struct Task {
     pub name: String,
     pub description: String,
     pub uid: String,
-    pub tags: OrdSet<String>,
+    pub tags: TagSet,
     pub priority: u32,
     pub task_status: TaskStatus,
     pub seq: u32,
