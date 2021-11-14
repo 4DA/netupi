@@ -286,6 +286,10 @@ fn stop_tracking(data: &mut AppModel) {
 }
 
 fn delete_task(model: &mut AppModel, uid: &String) {
+    if let Err(what) = db::delete_task(model.db.clone(), uid) {
+        println!("db error: {}", what);
+    }
+
     model.tasks.remove(uid);
     model.update_tags();
     model.check_update_selected();

@@ -90,3 +90,14 @@ pub fn update_task(conn: Rc<Connection>, task: &Task) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+pub fn delete_task(conn: Rc<Connection>, uid: &String) -> anyhow::Result<()> {
+    conn.execute(
+        "DELETE FROM tasks WHERE uid = ?1;",
+        &[uid],
+    )?;
+
+    println!("delete ok | t: {:?}", uid);
+
+    Ok(())
+}
