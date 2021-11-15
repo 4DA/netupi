@@ -89,8 +89,7 @@ fn type_of<T>(_: T) -> &'static str {
 
 #[derive(Debug, Clone, Data)]
 struct TrackingState {
-    active: bool,
-    task_uid: String,
+    task_uid: Option<String>,
     timestamp: Rc<DateTime<Utc>>,
     timer_id: Rc<TimerToken>
 }
@@ -246,7 +245,7 @@ pub fn main() -> anyhow::Result<()> {
         records,
         tags,
         focus,
-        tracking: TrackingState{active: false, task_uid: "".to_string(),
+        tracking: TrackingState{task_uid: None,
                                 timestamp: Rc::new(Utc::now()),
                                 timer_id: Rc::new(TimerToken::INVALID)},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
@@ -272,15 +271,14 @@ pub fn main() -> anyhow::Result<()> {
 }
 
 fn start_tracking(data: &mut AppModel, uid: String) {
-    data.tracking.active = true;
     data.tracking.timestamp = Rc::new(Utc::now());
-    data.tracking.task_uid = uid;
+    data.tracking.task_uid = Some(uid);
 }
 
 fn stop_tracking(data: &mut AppModel) {
-    if data.tracking.task_uid.is_empty() {return};
+    if data.tracking.task_uid.is_none() {return};
 
-    let mut task = data.tasks.get(&data.tracking.task_uid).expect("unknown uid").clone();
+    let mut task = data.tasks.get(data.tracking.task_uid.as_ref().unwrap()).expect("unknown uid").clone();
     let now = Rc::new(Utc::now());
     let record = TimeRecord{from: data.tracking.timestamp.clone(), to: now.clone(), uid: task.uid.clone()};
 
@@ -297,8 +295,7 @@ fn stop_tracking(data: &mut AppModel) {
              duration.num_hours(), duration.num_minutes(), duration.num_seconds());
 
     data.tasks = data.tasks.update(task.uid.clone(), task);
-    data.tracking.active = false;
-    data.tracking.task_uid = "".to_string();
+    data.tracking.task_uid = None;
 }
 
 fn delete_task(model: &mut AppModel, uid: &String) {
@@ -340,32 +337,31 @@ fn make_menu(_: Option<WindowId>, model: &AppModel, _: &Env) -> Menu<AppModel> {
 fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
     let selected_task = d.tasks.get(current).expect("unknown uid");
 
-    let uid = current.clone();
-
     // TODO: understand ownership with 'static type bound here
+
 
     let start_stop_item =
-        if uid.eq(&d.tracking.task_uid) {
-            MenuItem::new(LocalizedString::new("Stop tracking")).on_activate(
-                move |ctx, d: &mut AppModel, _env| {
-                    ctx.submit_command(COMMAND_TASK_STOP.with(()));
-                }
-            )
-        } else if d.tracking.task_uid.is_empty() {
+        if let Some(uid) = &d.tracking.task_uid {
+            if current.eq(uid) {
+                MenuItem::new(LocalizedString::new("Stop tracking")).on_activate(
+                    move |ctx, d: &mut AppModel, _env| {
+                        ctx.submit_command(COMMAND_TASK_STOP.with(()));
+                    })
+            } else {
+                let uid_for_closure = current.clone();
+                MenuItem::new(LocalizedString::new("Switch to")).on_activate(
+                    move |ctx, d: &mut AppModel, _env| {
+                        ctx.submit_command(COMMAND_TASK_SWITCH.with(uid_for_closure.clone()));
+                    })
+            }
+        } else{
+            let uid_for_closure = current.clone();
             MenuItem::new(LocalizedString::new("Start tracking")).on_activate(
                 move |ctx, d: &mut AppModel, _env| {
-                    ctx.submit_command(COMMAND_TASK_START.with(uid.clone()));
-                }
-            )
-        } else {
-            MenuItem::new(LocalizedString::new("Switch to")).on_activate(
-                move |ctx, d: &mut AppModel, _env| {
-                    ctx.submit_command(COMMAND_TASK_SWITCH.with(uid.clone()));
-                }
-            )
+                    ctx.submit_command(COMMAND_TASK_START.with(uid_for_closure.clone()));
+                })
         };
 
-    // TODO: understand ownership with 'static type bound here
     let uid_new = current.clone();
     let uid_edit = current.clone();
     let uid_delete = current.clone();
@@ -412,7 +408,7 @@ struct TaskListWidget {
 impl TaskListWidget {
     fn new() -> TaskListWidget {
         static TASK_COLOR_BG: Color = Color::rgb8(127, 0, 127);
-        static TASK_ACTIVE_COLOR_BG: Color = Color::rgb8(127, 0, 127);
+        static TASK_ACTIVE_COLOR_BG: Color = Color::rgb8(100, 75, 13);
 
         let inner = List::new(|| {
 
@@ -420,7 +416,7 @@ impl TaskListWidget {
                     Painter::new(|ctx: &mut PaintCtx, (shared, uid): &(AppModel, String), _env| {
                         let bounds = ctx.size().to_rect();
                         if shared.selected_task.eq(uid) {
-                            ctx.fill(bounds, &TASK_ACTIVE_COLOR_BG);
+                            ctx.fill(bounds, &TASK_COLOR_BG);
                         }
                         else {
                             ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
@@ -492,8 +488,11 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 let uid = cmd.get(COMMAND_TASK_COMPLETED).unwrap().clone();
                 let mut task = data.0.tasks.get(&uid).expect("unknown uid").clone();
                 task.task_status = TaskStatus::COMPLETED;
-                if data.0.tracking.task_uid.eq(&uid) {
-                    stop_tracking(&mut data.0);
+
+                if let Some(ref cur) = data.0.tracking.task_uid {
+                    if cur.eq(&uid) {
+                        stop_tracking(&mut data.0);
+                    }
                 }
 
                 data.0.tasks = data.0.tasks.update(uid, task);
@@ -505,7 +504,6 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             },
             Event::Timer(id) => {
                 if *id == *data.0.tracking.timer_id {
-                    println!("timer for task {} finished", data.0.tracking.task_uid);
                     play_sound(SOUND_TASK_FINISH.to_string());
                     stop_tracking(&mut data.0);
                 }
@@ -572,8 +570,8 @@ fn format_duration(dur: chrono::Duration) -> String {
 }
 
 fn get_status_string(d: &AppModel) -> String {
-    if d.tracking.active {
-        let active_task = &d.tasks.get(&d.tracking.task_uid).expect("unknown uid");
+    if let Some(ref uid) = d.tracking.task_uid {
+        let active_task = &d.tasks.get(uid).expect("unknown uid");
         let duration = Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
         let total = chrono::Duration::from_std(Duration::from_secs(10)).unwrap();
 
