@@ -941,15 +941,25 @@ fn ui_builder() -> impl Widget<AppModel> {
         Scroll::new(
             List::new(||{
                 Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
+                    let now: DateTime<Local> = DateTime::from(SystemTime::now());
                     let task = model.tasks.get(&record.uid).expect("unknown uid");
+                    let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
                     let duration = format_duration(record.to.signed_duration_since(*record.from));
-                    format!("{}: {}", task.name, duration)
+
+                    let time =
+                        if now.signed_duration_since(*record.from).num_days() > 0 {
+                            when.format("%b %-d %H:%M").to_string()
+                        } else {
+                            when.format("%H:%M").to_string()
+                        };
+
+                    format!("{} | {}: {}", time, task.name, duration)
                 })
-                .background(
-                    Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
-                        let bounds = ctx.size().to_rect();
-                        ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                    }))
+                // .background(
+                //     Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
+                //         let bounds = ctx.size().to_rect();
+                //         ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                //     }))
             })
                 .with_spacing(10.0)
                 .padding(10.0)
