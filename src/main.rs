@@ -412,33 +412,39 @@ impl TaskListWidget {
 
         let inner = List::new(|| {
 
-                let task_painter =
-                    Painter::new(|ctx: &mut PaintCtx, (shared, uid): &(AppModel, String), _env| {
-                        let bounds = ctx.size().to_rect();
-                        if shared.selected_task.eq(uid) {
-                            ctx.fill(bounds, &TASK_COLOR_BG);
-                        }
-                        else {
-                            ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                        }
-                    });
+            let task_painter =
+                Painter::new(|ctx: &mut PaintCtx, (shared, uid): &(AppModel, String), _env| {
+                    let bounds = ctx.size().to_rect();
+                    if shared.selected_task.eq(uid) {
+                        ctx.fill(bounds, &TASK_COLOR_BG);
+                    }
 
-                let container = Container::new(
-                    Label::new(|(d, uid): &(AppModel, String), _env: &_| {
-                        let task = d.tasks.get(uid).expect("unknown uid");
-                        format!("{}", task.name)
+                    if let Some(ref active) = shared.tracking.task_uid {
+                        if uid.eq(active) {
+                            ctx.stroke(bounds, &TASK_ACTIVE_COLOR_BG, 4.0);
+                            return;
+                        }
+                    }
+
+                    ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                });
+
+            let container = Container::new(
+                Label::new(|(d, uid): &(AppModel, String), _env: &_| {
+                    let task = d.tasks.get(uid).expect("unknown uid");
+                    format!("{}", task.name)
+                })
+                    .expand()
+                    .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
+                        shared.selected_task = uid.clone();
                     })
-                        .expand()
-                        .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
-                            shared.selected_task = uid.clone();
-                        })
-                        .align_vertical(UnitPoint::LEFT),
-                    )
-                    .background(task_painter)
-                    .fix_height(50.0);
+                    .align_vertical(UnitPoint::LEFT),
+            )
+                .background(task_painter)
+                .fix_height(50.0);
 
-                // container
-                ControllerHost::new(container, ContextMenuController)
+            // container
+            ControllerHost::new(container, ContextMenuController)
         })
             .with_spacing(10.);
 
