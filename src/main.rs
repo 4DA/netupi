@@ -116,7 +116,7 @@ struct AppModel {
 
 static TASK_COLOR_BG: Color                 = Color::rgb8(80, 73, 69);
 // static TASK_SELECTED_COLOR_BORDER: Color = Color::rgb8(211, 134, 155);
-static TASK_ACTIVE_COLOR_BG: Color          = Color::rgb8(255, 191, 34);
+static TASK_ACTIVE_COLOR_BG: Color          = Color::rgb8(250, 189, 47);
 
 static TIMER_INTERVAL: Duration = Duration::from_secs(10);
 static UI_TIMER_INTERVAL: Duration = Duration::from_secs(1);
@@ -125,7 +125,6 @@ const COMMAND_TASK_START:  Selector<String>    = Selector::new("tcmenu.task_star
 const COMMAND_TASK_STOP:   Selector            = Selector::new("tcmenu.task_stop");
 const COMMAND_TASK_SWITCH: Selector<String>    = Selector::new("tcmenu.task_switch");
 const COMMAND_TASK_NEW:    Selector            = Selector::new("tcmenu.task_new");
-const COMMAND_TASK_EDIT:   Selector<String>    = Selector::new("tcmenu.task_edit");
 const COMMAND_TASK_DELETE: Selector<String>    = Selector::new("tcmenu.task_delete");
 const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
 
@@ -366,20 +365,12 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
         };
 
     let uid_new = current.clone();
-    let uid_edit = current.clone();
     let uid_delete = current.clone();
     let uid_completed = current.clone();
 
     Menu::empty()
         .entry(
             start_stop_item,
-        )
-        .entry(
-            MenuItem::new(LocalizedString::new("Edit"))
-                .on_activate(
-                    move |ctx, data: &mut AppModel, _env| {
-                    ctx.submit_command(COMMAND_TASK_EDIT.with(uid_edit.clone()));
-                }),
         )
         .entry(
             MenuItem::new(LocalizedString::new("Mark completed"))
@@ -435,14 +426,14 @@ impl TaskListWidget {
                     let task = d.tasks.get(uid).expect("unknown uid");
                     format!("{}", task.name)
                 })
-                    .expand()
-                    .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
+                 .expand_width()
+                 .align_vertical(UnitPoint::LEFT)
+                 .padding(10.0),
+                )
+                .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
                         shared.selected_task = uid.clone();
                     })
-                    .align_vertical(UnitPoint::LEFT),
-            )
-                .background(task_painter)
-                .fix_height(50.0);
+                .background(task_painter);
 
             // container
             ControllerHost::new(container, ContextMenuController)
@@ -487,9 +478,6 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 data.0.tasks.insert(uid.clone(), task);
                 data.0.update_tags();
                 ctx.request_update();
-            },
-            Event::Command(cmd) if cmd.is(COMMAND_TASK_EDIT) => {
-
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_COMPLETED) => {
                 let uid = cmd.get(COMMAND_TASK_COMPLETED).unwrap().clone();
@@ -957,6 +945,7 @@ fn ui_builder() -> impl Widget<AppModel> {
 
                     format!("{} | {}: {}", time, task.name, duration)
                 })
+                .padding(10.0)
                 // .background(
                 //     Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
                 //         let bounds = ctx.size().to_rect();
