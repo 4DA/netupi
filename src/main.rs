@@ -114,6 +114,9 @@ struct AppModel {
     tag_filter: Option<String>,
 }
 
+static TASK_COLOR_BG: Color                 = Color::rgb8(80, 73, 69);
+// static TASK_SELECTED_COLOR_BORDER: Color = Color::rgb8(211, 134, 155);
+static TASK_ACTIVE_COLOR_BG: Color          = Color::rgb8(255, 191, 34);
 
 static TIMER_INTERVAL: Duration = Duration::from_secs(10);
 static UI_TIMER_INTERVAL: Duration = Duration::from_secs(1);
@@ -407,8 +410,6 @@ struct TaskListWidget {
 
 impl TaskListWidget {
     fn new() -> TaskListWidget {
-        static TASK_COLOR_BG: Color = Color::rgb8(127, 0, 127);
-        static TASK_ACTIVE_COLOR_BG: Color = Color::rgb8(100, 75, 13);
 
         let inner = List::new(|| {
 
@@ -647,7 +648,7 @@ impl Widget<AppModel> for StatusBar {
 }
 
 fn task_details_widget() -> impl Widget<Task> {
-    static TASK_COLOR_BG: Color = Color::rgb8(127, 0, 127);
+
     static FONT_CAPTION_DESCR: FontDescriptor =
         FontDescriptor::new(FontFamily::SYSTEM_UI)
         .with_weight(FontWeight::BOLD)
@@ -799,9 +800,6 @@ fn ui_builder() -> impl Widget<AppModel> {
     let mut tasks_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
     let mut focus_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
-    static TASK_COLOR_BG: Color = Color::rgb8(127, 0, 127);
-    static TASK_ACTIVE_COLOR_BG: Color = Color::rgb8(127, 0, 127);
-
     static FONT_CAPTION_DESCR: FontDescriptor = FontDescriptor::new(FontFamily::SYSTEM_UI)
     .with_weight(FontWeight::BOLD)
     .with_size(18.0);
@@ -820,7 +818,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                         Painter::new(|ctx: &mut PaintCtx, (shared, id): &(AppModel, String), _env| {
                             let bounds = ctx.size().to_rect();
                             if shared.focus_filter.eq(id) {
-                                ctx.fill(bounds, &TASK_ACTIVE_COLOR_BG);
+                                ctx.fill(bounds, &TASK_COLOR_BG);
                             }
                             else {
                                 ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
@@ -859,7 +857,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                             let bounds = ctx.size().to_rect();
                             if shared.tag_filter.is_some() &&
                                 shared.tag_filter.as_ref().unwrap().eq(id) {
-                                ctx.fill(bounds, &TASK_ACTIVE_COLOR_BG);
+                                ctx.fill(bounds, &TASK_COLOR_BG);
                             }
                             else {
                                 ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
