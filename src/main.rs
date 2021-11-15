@@ -962,7 +962,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                 .with_spacing(10.0)
                 .padding(10.0)
                 .lens(lens::Identity.map(
-                    |m: &AppModel| (m.clone(), m.records.iter().map(|(_, v)| v.clone()).collect()),
+                    |m: &AppModel| (m.clone(), m.records.values().map(|v| v.clone()).rev().collect()),
                     |_data: &mut AppModel, _m: (AppModel, Vector<TimeRecord>)| {},
                 ))
         ),
