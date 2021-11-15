@@ -29,7 +29,7 @@ use druid::widget::{Button, CrossAxisAlignment, Flex, Label, SizedBox, RawLabel,
 use druid::{
     AppLauncher, Application, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     FontWeight, FontDescriptor, FontFamily, Point,
-    Menu, MenuItem, TimerToken,
+    Menu, MenuItem, TimerToken, KeyOrValue,
     Lens, LocalizedString, theme, UnitPoint, Widget, WidgetPod, WidgetExt, WindowDesc, WindowId,
     Command, Selector, Target};
 
@@ -115,7 +115,7 @@ struct AppModel {
 }
 
 static TASK_COLOR_BG: Color                 = Color::rgb8(80, 73, 69);
-// static TASK_SELECTED_COLOR_BORDER: Color = Color::rgb8(211, 134, 155);
+static APP_BORDER: Color                    = Color::rgb8(60, 56, 54);
 static TASK_ACTIVE_COLOR_BG: Color          = Color::rgb8(250, 189, 47);
 
 static TIMER_INTERVAL: Duration = Duration::from_secs(10);
@@ -925,7 +925,10 @@ fn ui_builder() -> impl Widget<AppModel> {
     );
 
 
-    main_row.add_flex_child(tasks_column, 2.0);
+    main_row.add_flex_child(tasks_column
+                            .padding(10.0)
+                            .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0),
+                            2.0);
 
     main_row.add_flex_child(
         Scroll::new(
@@ -945,7 +948,7 @@ fn ui_builder() -> impl Widget<AppModel> {
 
                     format!("{} | {}: {}", time, task.name, duration)
                 })
-                .padding(10.0)
+
                 // .background(
                 //     Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
                 //         let bounds = ctx.size().to_rect();
@@ -976,7 +979,10 @@ fn ui_builder() -> impl Widget<AppModel> {
     //         .align_vertical(UnitPoint::CENTER),
     // );
 
-    root.with_child(StatusBar::new()).align_horizontal(UnitPoint::RIGHT)
+    root.with_child(Container::new(StatusBar::new()
+                                   .align_horizontal(UnitPoint::CENTER))
+                    .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0),
+    )
         // .debug_paint_layout()
 }
 
