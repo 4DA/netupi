@@ -45,6 +45,7 @@ pub struct Task {
 pub struct TimeRecord {
     pub from: Rc<DateTime<Utc>>,
     pub to: Rc<DateTime<Utc>>,
+    pub uid: String
 }
 
 impl Task {

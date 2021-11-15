@@ -275,8 +275,13 @@ fn stop_tracking(data: &mut AppModel) {
 
     let mut task = data.tasks.get(&data.tracking.task_uid).expect("unknown uid").clone();
     let now = Rc::new(Utc::now());
+    let record = TimeRecord{from: data.tracking.timestamp.clone(), to: now.clone(), uid: task.uid.clone()};
 
-    task.time_records.push_back(TimeRecord{from: data.tracking.timestamp.clone(), to: now.clone()});
+    if let Err(what) = db::add_time_record(data.db.clone(), &record) {
+        println!("db error: {}", what);
+    }
+
+    task.time_records.push_back(record);
 
     let duration = now.signed_duration_since(data.tracking.timestamp.as_ref().clone());
 

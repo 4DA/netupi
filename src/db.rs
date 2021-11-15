@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::iter::FromIterator;
 
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use serde::ser::{Serialize, Serializer, SerializeSeq, SerializeMap};
@@ -40,7 +41,7 @@ pub fn init() -> anyhow::Result<Connection>{
     let conn = Connection::open("time_tracker.db")?;
 
     conn.execute(
-        "create table if not exists tasks (
+        "CREATE TABLE IF NOT EXISTS tasks (
              uid text primary key,
              name text not null,
              description text,
@@ -52,10 +53,10 @@ pub fn init() -> anyhow::Result<Connection>{
         NO_PARAMS,
     )?;
     conn.execute(
-        "create table if not exists time_records (
-             time integer primary key,
-             duration integer not null,
-             uid text not null
+        "CREATE TABLE IF NOT EXISTS time_records (
+             ts_from INTEGER PRIMARY KEY,
+             ts_to INTEGER,
+             uid TEXT NOT NULL
          )",
         NO_PARAMS,
     )?;
@@ -134,14 +135,26 @@ pub fn get_tasks(conn: Rc<Connection>) -> anyhow::Result<(TaskMap, TagSet)>
     let mut tags = TagSet::new();
 
     for x in sqtasks {
-        x.map(|t| {
+        if let Ok(t) = x {
             for tag in &t.tags {
                 tags.insert(tag.clone());
             }
 
             tasks = tasks.update(t.uid.clone(), t);
-        });
+        }
     }
 
     Ok((tasks, tags))
+}
+
+pub fn add_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::Result<()>
+{
+    conn.execute(
+        "INSERT INTO time_records (ts_from, ts_to, uid) VALUES (?1, ?2, ?3)",
+        params![UnixTimestamp(*record.from), UnixTimestamp(*record.to), record.uid],
+    )?;
+
+    println!("time record insert ok | t: {:?}", &record);
+
+    Ok(())
 }
