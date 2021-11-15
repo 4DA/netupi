@@ -6,8 +6,9 @@ use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use serde::{Serialize, Serializer, Deserialize};
 use serde::ser::{SerializeSeq, SerializeMap};
 
-pub type TagSet = OrdSet<String>;
-pub type TaskMap = HashMap<String, Task>;
+pub type TagSet        = OrdSet<String>;
+pub type TaskMap       = HashMap<String, Task>;
+pub type TimeRecordMap = OrdMap<DateTime<Utc>, TimeRecord>;
 
 #[derive(Debug, Clone, Data, PartialEq, Serialize, Deserialize)]
 pub enum TaskStatus {

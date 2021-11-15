@@ -105,6 +105,7 @@ struct ViewState {
 struct AppModel {
     db: Rc<rusqlite::Connection>,
     tasks: TaskMap,
+    records: TimeRecordMap,
     tags: OrdSet<String>,
     focus: Vector<String>,
     tracking: TrackingState,
@@ -233,11 +234,16 @@ pub fn main() -> anyhow::Result<()> {
     // let (tasks, tags) = parse_ical(file_path);
 
     let (tasks, tags) = db::get_tasks(db.clone())?;
+    let records = db::get_time_records(db.clone(),
+        &DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
+        &DateTime::from(SystemTime::now()))?;
+
     let selected_task = get_any_task_uid(&tasks);
 
     let mut data = AppModel{
         db,
         tasks,
+        records,
         tags,
         focus,
         tracking: TrackingState{active: false, task_uid: "".to_string(),
@@ -253,6 +259,7 @@ pub fn main() -> anyhow::Result<()> {
     data.update_tags();
 
     let main_window = WindowDesc::new(ui_builder())
+        .window_size((1280.0, 800.0))
         .menu(make_menu)
         .title(LocalizedString::new("time-tracker-window-title").with_placeholder("Time tracker"));
     
@@ -280,6 +287,7 @@ fn stop_tracking(data: &mut AppModel) {
     if let Err(what) = db::add_time_record(data.db.clone(), &record) {
         println!("db error: {}", what);
     }
+    data.records.insert(*record.from, record.clone());
 
     task.time_records.push_back(record);
 
@@ -927,7 +935,30 @@ fn ui_builder() -> impl Widget<AppModel> {
     );
 
 
-    main_row.add_flex_child(tasks_column, 1.0);
+    main_row.add_flex_child(tasks_column, 2.0);
+
+    main_row.add_flex_child(
+        Scroll::new(
+            List::new(||{
+                Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
+                    let task = model.tasks.get(&record.uid).expect("unknown uid");
+                    let duration = format_duration(record.to.signed_duration_since(*record.from));
+                    format!("{}: {}", task.name, duration)
+                })
+                .background(
+                    Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
+                        let bounds = ctx.size().to_rect();
+                        ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                    }))
+            })
+                .with_spacing(10.0)
+                .padding(10.0)
+                .lens(lens::Identity.map(
+                    |m: &AppModel| (m.clone(), m.records.iter().map(|(_, v)| v.clone()).collect()),
+                    |_data: &mut AppModel, _m: (AppModel, Vector<TimeRecord>)| {},
+                ))
+        ),
+        1.0);
 
     root.add_flex_child(main_row, 1.0);
 

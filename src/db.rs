@@ -158,3 +158,23 @@ pub fn add_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::Res
 
     Ok(())
 }
+
+pub fn get_time_records(conn: Rc<Connection>, from: &DateTime<Utc>, to: &DateTime<Utc>)
+                        -> anyhow::Result<TimeRecordMap>
+{
+    let mut stmt = conn.prepare("SELECT * FROM time_records WHERE ts_from >= ?1 AND ts_to < ?2")?;
+
+    let rows = stmt.query_map(params![UnixTimestamp(*from), UnixTimestamp(*to)],
+        |row| {
+            let ts_from: UnixTimestamp = row.get(0)?;
+            let ts_to: UnixTimestamp = row.get(1)?;
+
+            Ok(TimeRecord {
+                from: Rc::new(ts_from.0),
+                to: Rc::new(ts_to.0),
+                uid: row.get(2)?
+            })
+        })?;
+
+    Ok(TimeRecordMap::from_iter(rows.map(|x| (*(x.as_ref().unwrap().from).clone(), x.unwrap()))))
+}
