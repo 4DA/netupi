@@ -297,7 +297,7 @@ fn stop_tracking(data: &mut AppModel) {
         println!("db error: {}", what);
     }
     data.records.insert(*record.from, record.clone());
-
+    add_record_to_sum(data.task_sums.get_mut(&task.uid).expect("unknown uid"), &record);
     task.time_records.push_back(record);
 
     let duration = now.signed_duration_since(data.tracking.timestamp.as_ref().clone());
@@ -793,8 +793,6 @@ fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
             let now = Local::now();
             let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
             let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
-            println!("utc begin day: {}", day_start.format("%b %-d %H:%M").to_string());
-
             let total_day = get_total_time(sum, &day_start);
             let total = get_total_time(sum, &epoch);
 

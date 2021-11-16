@@ -1,3 +1,4 @@
+use std::ops::Add;
 use std::rc::Rc;
 use druid::lens::{self, LensExt};
 use druid::{Data, Lens};
@@ -52,6 +53,12 @@ pub struct TimeRecord {
     pub uid: String
 }
 
+impl TimeRecord {
+    fn duration(&self) -> chrono::Duration {
+        self.to.signed_duration_since(*self.from)
+    }
+}
+
 impl Task {
     pub fn new(name: String, description: String,
            uid: String, tags: OrdSet<String>,
@@ -69,6 +76,13 @@ pub struct TimePrefix {
 impl TimePrefix {
     pub fn new(duration: &chrono::Duration) -> TimePrefix {
         TimePrefix{duration: Rc::new(duration.clone())}
+    }
+}
+
+impl Add for TimePrefix {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        TimePrefix{duration: Rc::new(*self.duration + *other.duration)}
     }
 }
 
@@ -112,6 +126,15 @@ pub fn get_total_time(prefix_sum: &TimePrefixSum, from: &DateTime::<Utc>)
         (None, Some(max)) => *max.1.duration,
             _ => Duration::zero(),
     }
+}
+
+pub fn add_record_to_sum(sum_map: &mut TimePrefixSum, record: &TimeRecord) {
+    let last = match sum_map.get_max() {
+        Some(ref max) => max.1.clone() + TimePrefix::new(&record.duration()),
+        None => TimePrefix::new(&chrono::Duration::zero()),
+    };
+
+    sum_map.insert(*record.from, last);
 }
 
 pub fn build_time_prefix_sum(tasks: &TaskMap, records: &TimeRecordMap, filter: String)
