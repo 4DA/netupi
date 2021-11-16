@@ -298,7 +298,6 @@ fn stop_tracking(data: &mut AppModel) {
     }
     data.records.insert(*record.from, record.clone());
     add_record_to_sum(data.task_sums.get_mut(&task.uid).expect("unknown uid"), &record);
-    task.time_records.push_back(record);
 
     let duration = now.signed_duration_since(data.tracking.timestamp.as_ref().clone());
 
@@ -477,7 +476,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
                 let uid = generate_uid();
                 let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), OrdSet::new(),
-                                     0, TaskStatus::NEEDS_ACTION, 0, Vector::new());
+                                     0, TaskStatus::NEEDS_ACTION, 0);
 
                 if let Err(what) = db::add_task(data.0.db.clone(), &task) {
                     println!("db error: {}", what);
@@ -586,13 +585,7 @@ fn get_status_string(d: &AppModel) -> String {
                 active_task.name, format_duration(duration), format_duration(total))
     }
     else {
-        if d.selected_task.is_empty() {
-            format!("No records")
-        }
-        else {
-            let selected = d.tasks.get(&d.selected_task).expect("unknown uid");
-            format!("Records: {}", selected.time_records.len())
-        }
+        format!("")
     }
 }
 
@@ -784,11 +777,6 @@ fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
     column.add_child(
         Label::new(|(task, sum): &(Task, TimePrefixSum), _env: &_| {
             let mut result = String::new();
-
-            for record in &task.time_records {
-                let new_record = format!("{:?} - {:?}\n", record.from, record.to);
-                result.push_str(&new_record);
-            }
 
             let now = Local::now();
             let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));

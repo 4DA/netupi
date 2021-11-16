@@ -126,8 +126,7 @@ pub fn get_tasks(conn: Rc<Connection>) -> anyhow::Result<(TaskMap, TagSet)>
             tags         : tag_set,
             priority     : row.get::<usize, u32>(4)?,
             task_status  : serde_json::from_str::<TaskStatus>(&stat_str).unwrap(),
-            seq          : row.get::<usize, u32>(6)?,
-            time_records : Vector::new()
+            seq          : row.get::<usize, u32>(6)?
         })
     })?;
 

@@ -43,7 +43,6 @@ pub struct Task {
     pub priority: u32,
     pub task_status: TaskStatus,
     pub seq: u32,
-    pub time_records: Vector<TimeRecord>,
 }
 
 #[derive(Debug, Clone, Data)]
@@ -62,9 +61,8 @@ impl TimeRecord {
 impl Task {
     pub fn new(name: String, description: String,
            uid: String, tags: OrdSet<String>,
-           priority: u32, task_status: TaskStatus, seq: u32,
-           time_records: Vector<TimeRecord>) -> Task {
-        return Task{name, description, uid, tags, priority, task_status, seq, time_records};
+           priority: u32, task_status: TaskStatus, seq: u32) -> Task {
+        return Task{name, description, uid, tags, priority, task_status, seq};
     }
 }
 

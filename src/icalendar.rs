@@ -118,7 +118,7 @@ fn parse_todo(ical_todo: &IcalTodo) -> ImportResult<Task> {
         }
     }
 
-    return Ok(Task::new(summary, description, uid, tags, priority, status, seq, time_records));
+    return Ok(Task::new(summary, description, uid, tags, priority, status, seq));
 }
 
 
