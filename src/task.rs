@@ -2,6 +2,7 @@ use std::rc::Rc;
 use druid::lens::{self, LensExt};
 use druid::{Data, Lens};
 use chrono::prelude::*;
+use chrono::Duration;
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use serde::{Serialize, Serializer, Deserialize};
 use serde::ser::{SerializeSeq, SerializeMap};
@@ -9,6 +10,8 @@ use serde::ser::{SerializeSeq, SerializeMap};
 pub type TagSet        = OrdSet<String>;
 pub type TaskMap       = HashMap<String, Task>;
 pub type TimeRecordMap = OrdMap<DateTime<Utc>, TimeRecord>;
+pub type TimePrefixSum = OrdMap<DateTime<Utc>, TimePrefix>;
+pub type TaskSums      = OrdMap::<String, TimePrefixSum>;
 
 #[derive(Debug, Clone, Data, PartialEq, Serialize, Deserialize)]
 pub enum TaskStatus {
@@ -58,6 +61,18 @@ impl Task {
     }
 }
 
+#[derive(Debug, Clone, Data, PartialEq)]
+pub struct TimePrefix {
+    duration: Rc<chrono::Duration>,
+}
+
+impl TimePrefix {
+    pub fn new(duration: chrono::Duration) -> TimePrefix {
+        TimePrefix{duration: Rc::new(duration)}
+    }
+}
+
+
 pub struct Wrapper{
     inner: OrdSet<String>
 }
@@ -81,4 +96,40 @@ where
         }
         seq.end()
     }
+}
+
+pub enum PrefixSumFilter {
+    ALL,
+    TASK(String)
+}
+
+pub fn get_total_time(prefix_sum: &TimePrefixSum, from: &DateTime::<Utc>)
+                      -> chrono::Duration
+{
+    let (_, after) = prefix_sum.split(from);
+    match (after.get_min(), after.get_max()) {
+        (Some(f), Some(v)) => *f.1.duration - *v.1.duration,
+            _ => Duration::zero(),
+    }
+}
+
+pub fn build_time_prefix_sum(tasks: &TaskMap, records: &TimeRecordMap, filter: PrefixSumFilter)
+                             -> TimePrefixSum
+{
+    let mut result = TimePrefixSum::new();
+    let epoch_0 = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
+    result.insert(epoch_0, TimePrefix::new(Duration::zero()));
+
+    let mut S = Duration::zero();
+
+    for (k, v) in records {
+        match &filter {
+            ALL => S = S + v.to.signed_duration_since(*v.from),
+            PrefixSumFilter::TASK(ref uid) if uid.eq(&v.uid)
+                => S = S + v.to.signed_duration_since(*v.from),
+        }
+        result.insert(*v.from, TimePrefix::new(S));
+    }
+
+    return result;
 }

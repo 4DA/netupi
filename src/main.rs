@@ -105,6 +105,7 @@ struct AppModel {
     db: Rc<rusqlite::Connection>,
     tasks: TaskMap,
     records: TimeRecordMap,
+    task_sums: TaskSums,
     tags: OrdSet<String>,
     focus: Vector<String>,
     tracking: TrackingState,
@@ -239,12 +240,20 @@ pub fn main() -> anyhow::Result<()> {
         &DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
         &DateTime::from(SystemTime::now()))?;
 
+    let mut task_sums = TaskSums::new();
+
+    for (uid, _) in &tasks {
+        task_sums.insert(uid.clone(),
+            build_time_prefix_sum(&tasks, &records, PrefixSumFilter::TASK(uid.clone())));
+    }
+
     let selected_task = get_any_task_uid(&tasks);
 
     let mut data = AppModel{
         db,
         tasks,
         records,
+        task_sums,
         tags,
         focus,
         tracking: TrackingState{task_uid: None,
