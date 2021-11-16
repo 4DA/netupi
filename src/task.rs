@@ -9,7 +9,7 @@ use serde::{Serialize, Serializer, Deserialize};
 use serde::ser::{SerializeSeq, SerializeMap};
 
 pub type TagSet        = OrdSet<String>;
-pub type TaskMap       = HashMap<String, Task>;
+pub type TaskMap       = OrdMap<String, Task>;
 pub type TimeRecordMap = OrdMap<DateTime<Utc>, TimeRecord>;
 pub type TimePrefixSum = OrdMap<DateTime<Utc>, TimePrefix>;
 pub type TaskSums      = OrdMap::<String, TimePrefixSum>;
