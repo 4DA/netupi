@@ -976,7 +976,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                             .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0),
                             2.0);
 
-    main_row.add_flex_child(
+    main_row.add_child(
         Scroll::new(
             List::new(||{
                 Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
@@ -1007,8 +1007,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                     |m: &AppModel| (m.clone(), m.records.values().map(|v| v.clone()).rev().collect()),
                     |_data: &mut AppModel, _m: (AppModel, Vector<TimeRecord>)| {},
                 ))
-        ),
-        1.0);
+        ));
 
     root.add_flex_child(main_row, 1.0);
 
