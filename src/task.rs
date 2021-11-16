@@ -67,8 +67,8 @@ pub struct TimePrefix {
 }
 
 impl TimePrefix {
-    pub fn new(duration: chrono::Duration) -> TimePrefix {
-        TimePrefix{duration: Rc::new(duration)}
+    pub fn new(duration: &chrono::Duration) -> TimePrefix {
+        TimePrefix{duration: Rc::new(duration.clone())}
     }
 }
 
@@ -106,29 +106,28 @@ pub enum PrefixSumFilter {
 pub fn get_total_time(prefix_sum: &TimePrefixSum, from: &DateTime::<Utc>)
                       -> chrono::Duration
 {
-    let (_, after) = prefix_sum.split(from);
-    match (after.get_min(), after.get_max()) {
-        (Some(f), Some(v)) => *f.1.duration - *v.1.duration,
+    let (before, after) = prefix_sum.split(from);
+    match (before.get_max(), after.get_max()) {
+        (Some(min), Some(max)) => *max.1.duration - *min.1.duration,
+        (None, Some(max)) => *max.1.duration,
             _ => Duration::zero(),
     }
 }
 
-pub fn build_time_prefix_sum(tasks: &TaskMap, records: &TimeRecordMap, filter: PrefixSumFilter)
+pub fn build_time_prefix_sum(tasks: &TaskMap, records: &TimeRecordMap, filter: String)
                              -> TimePrefixSum
 {
     let mut result = TimePrefixSum::new();
     let epoch_0 = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
-    result.insert(epoch_0, TimePrefix::new(Duration::zero()));
+    result.insert(epoch_0, TimePrefix::new(&Duration::zero()));
 
-    let mut S = Duration::zero();
+    let mut psum = Duration::zero();
 
     for (k, v) in records {
-        match &filter {
-            ALL => S = S + v.to.signed_duration_since(*v.from),
-            PrefixSumFilter::TASK(ref uid) if uid.eq(&v.uid)
-                => S = S + v.to.signed_duration_since(*v.from),
+        if filter.eq(&v.uid) {
+            psum = psum + v.to.signed_duration_since(*v.from);
+            result.insert(*v.from, TimePrefix::new(&psum));
         }
-        result.insert(*v.from, TimePrefix::new(S));
     }
 
     return result;

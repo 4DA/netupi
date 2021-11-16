@@ -243,8 +243,8 @@ pub fn main() -> anyhow::Result<()> {
     let mut task_sums = TaskSums::new();
 
     for (uid, _) in &tasks {
-        task_sums.insert(uid.clone(),
-            build_time_prefix_sum(&tasks, &records, PrefixSumFilter::TASK(uid.clone())));
+        let sum = build_time_prefix_sum(&tasks, &records, uid.clone());
+        task_sums.insert(uid.clone(), sum);
     }
 
     let selected_task = get_any_task_uid(&tasks);
@@ -647,8 +647,7 @@ impl Widget<AppModel> for StatusBar {
     }
 }
 
-fn task_details_widget() -> impl Widget<Task> {
-
+fn task_edit_widget() -> impl Widget<Task> {
     static FONT_CAPTION_DESCR: FontDescriptor =
         FontDescriptor::new(FontFamily::SYSTEM_UI)
         .with_weight(FontWeight::BOLD)
@@ -752,30 +751,6 @@ fn task_details_widget() -> impl Widget<Task> {
         ,
     );
 
-    column.add_spacer(15.0);
-
-    column.add_child(Label::new("Task time log").with_font(FONT_CAPTION_DESCR.clone()));
-    column.add_default_spacer();
-    column.add_child(
-        Label::new(|task: &Task, _env: &_| {
-            let mut result = String::new();
-
-            for record in &task.time_records {
-                let new_record = format!("{:?} - {:?}\n", record.from, record.to);
-                result.push_str(&new_record);
-            }
-
-            return result;
-        })
-        .padding(10.0)
-        .background(
-            Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
-                let bounds = ctx.size().to_rect();
-                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-            }))
-    );
-
-
     // DropdownSelect from widget nursery creates separated window
     // column.add_flex_child(
     //     DropdownSelect::new(vec![
@@ -788,6 +763,52 @@ fn task_details_widget() -> impl Widget<Task> {
     //     .lens(Task::task_status),
     //     1.0,
     // );
+
+    return column;
+}
+
+fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
+    static FONT_CAPTION_DESCR: FontDescriptor =
+        FontDescriptor::new(FontFamily::SYSTEM_UI)
+        .with_weight(FontWeight::BOLD)
+        .with_size(16.0);
+
+    let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
+    let edit_widget = task_edit_widget().lens(druid::lens!((Task, TimePrefixSum), 0));
+    column.add_child(edit_widget);
+
+    column.add_spacer(15.0);
+
+    column.add_child(Label::new("Task time log").with_font(FONT_CAPTION_DESCR.clone()));
+    column.add_default_spacer();
+    column.add_child(
+        Label::new(|(task, sum): &(Task, TimePrefixSum), _env: &_| {
+            let mut result = String::new();
+
+            for record in &task.time_records {
+                let new_record = format!("{:?} - {:?}\n", record.from, record.to);
+                result.push_str(&new_record);
+            }
+
+            let now = Local::now();
+            let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
+            let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
+            println!("utc begin day: {}", day_start.format("%b %-d %H:%M").to_string());
+
+            let total_day = get_total_time(sum, &day_start);
+            let total = get_total_time(sum, &epoch);
+
+            result.push_str(&format!("Today: {}\n", format_duration(total_day.clone())));
+            result.push_str(&format!("Total: {}", format_duration(total.clone())));
+            return result;
+        })
+        .padding(10.0)
+        .background(
+            Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
+                let bounds = ctx.size().to_rect();
+                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+            }))
+    );
 
     return column;
 }
@@ -915,9 +936,16 @@ fn ui_builder() -> impl Widget<AppModel> {
         )
             .lens(lens::Identity.map(
                 // Expose shared data with children data
-                |d: &AppModel| d.tasks.get(&d.selected_task).map_or(None, |r| Some(r.clone())),
-                |d: &mut AppModel, x: Option<Task>| {
-                    if let Some(mut new_task) = x {
+                |d: &AppModel|
+                match (d.tasks.get(&d.selected_task).map_or(None, |r| Some(r.clone())),
+                       d.task_sums.get(&d.selected_task).map_or(None, |r| Some(r.clone())))
+                {
+                    (Some(task), Some(time)) => Some((task, time)),
+                    _ => None,
+                },
+
+                |d: &mut AppModel, x: Option<(Task, TimePrefixSum)>| {
+                    if let Some((mut new_task, _)) = x {
                         if let Some(prev) = d.tasks.get(&d.selected_task) {
                             if !prev.same(&new_task) {
                                 if let Err(what) = db::update_task(d.db.clone(), &new_task) {
