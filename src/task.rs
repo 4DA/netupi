@@ -126,6 +126,17 @@ pub fn get_total_time(prefix_sum: &TimePrefixSum, from: &DateTime::<Utc>)
     }
 }
 
+pub fn get_total_time_from_sums(sums: &TaskSums, from: &DateTime::<Utc>) -> chrono::Duration
+{
+    let mut result = Duration::zero();
+
+    for (_, s) in sums {
+        result = result + get_total_time(&s, from)
+    }
+
+    return result;
+}
+
 pub fn add_record_to_sum(sum_map: &mut TimePrefixSum, record: &TimeRecord) {
     let last = match sum_map.get_max() {
         Some(ref max) => max.1.clone() + TimePrefix::new(&record.duration()),

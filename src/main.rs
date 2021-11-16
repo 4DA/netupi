@@ -976,7 +976,57 @@ fn ui_builder() -> impl Widget<AppModel> {
                             .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0),
                             2.0);
 
-    main_row.add_child(
+    let mut time_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
+
+    time_column.add_child(Label::new("Total time log")
+                          .with_font(FONT_CAPTION_DESCR.clone())
+                          .padding(10.0));
+
+    time_column.add_child(
+        Label::new(|model: &AppModel, _env: &_| {
+            let mut result = String::new();
+
+            let now = Local::now();
+            let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
+
+            let mut total_week = String::new();
+
+            let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
+            let total_day = get_total_time_from_sums(&model.task_sums, &day_start);
+
+            let total = get_total_time_from_sums(&model.task_sums, &epoch);
+
+            result.push_str(&format!("Today: {}\n", format_duration(total_day.clone())));
+
+            Utc.from_local_datetime(
+                &NaiveDate::from_isoywd(now.year(), now.iso_week().week(), Weekday::Mon)
+                .and_time(NaiveTime::from_hms(0,0,0)))
+                .single()
+                .map(|utc| result.push_str(
+                    &format!("Week: {}\n",
+                             format_duration(get_total_time_from_sums(&model.task_sums, &utc)))));
+
+            Utc.from_local_datetime(
+                &NaiveDate::from_ymd(now.year(), now.month(), 1)
+                .and_time(NaiveTime::from_hms(0, 0, 0)))
+                .single()
+                .map(|utc| result.push_str(
+                    &format!("Month: {}\n",
+                             format_duration(get_total_time_from_sums(&model.task_sums, &utc)))));
+
+            result.push_str(&format!("All time: {}", format_duration(total.clone())));
+
+            result
+        })
+        .padding(10.0)
+        .lens(lens::Identity.map(
+                    |m: &AppModel| m.clone(),
+                    |_data: &mut AppModel, _m: AppModel| {},
+        )));
+
+    time_column.add_default_spacer();
+
+    time_column.add_flex_child(
         Scroll::new(
             List::new(||{
                 Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
@@ -1003,11 +1053,14 @@ fn ui_builder() -> impl Widget<AppModel> {
             })
                 .with_spacing(10.0)
                 .padding(10.0)
+                .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0)
                 .lens(lens::Identity.map(
                     |m: &AppModel| (m.clone(), m.records.values().map(|v| v.clone()).rev().collect()),
                     |_data: &mut AppModel, _m: (AppModel, Vector<TimeRecord>)| {},
                 ))
-        ));
+        ), 1.0);
+
+    main_row.add_child(time_column);
 
     root.add_flex_child(main_row, 1.0);
 
