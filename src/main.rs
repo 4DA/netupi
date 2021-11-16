@@ -950,9 +950,9 @@ fn ui_builder() -> impl Widget<AppModel> {
                 // Expose shared data with children data
                 |d: &AppModel|
                 match (d.tasks.get(&d.selected_task).map_or(None, |r| Some(r.clone())),
-                       d.task_sums.get(&d.selected_task).map_or(None, |r| Some(r.clone())))
+                       d.task_sums.get(&d.selected_task).map_or(TimePrefixSum::new(), |r| r.clone()))
                 {
-                    (Some(task), Some(time)) => Some((task, time)),
+                    (Some(task), time) => Some((task, time)),
                     _ => None,
                 },
 
@@ -1048,7 +1048,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                             when.format("%H:%M").to_string()
                         };
 
-                    format!("{} | {}: {}", time, task.name, duration)
+                    format!("{} | {} @ {}", duration, task.name, time)
                 })
 
                 // .background(
