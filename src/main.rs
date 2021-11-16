@@ -780,12 +780,32 @@ fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
 
             let now = Local::now();
             let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
+
+            let mut total_week = String::new();
+
             let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
             let total_day = get_total_time(sum, &day_start);
+
             let total = get_total_time(sum, &epoch);
 
             result.push_str(&format!("Today: {}\n", format_duration(total_day.clone())));
+
+            Utc.from_local_datetime(
+                &NaiveDate::from_isoywd(now.year(), now.iso_week().week(), Weekday::Mon)
+                .and_time(NaiveTime::from_hms(0,0,0)))
+                .single()
+                .map(|utc| result.push_str(&format!("Week: {}\n",
+                                                    format_duration(get_total_time(sum, &utc)))));
+
+            Utc.from_local_datetime(
+                &NaiveDate::from_ymd(now.year(), now.month(), 1)
+                .and_time(NaiveTime::from_hms(0, 0, 0)))
+                .single()
+                .map(|utc| result.push_str(&format!("Month: {}\n",
+                                                    format_duration(get_total_time(sum, &utc)))));
+
             result.push_str(&format!("Total: {}", format_duration(total.clone())));
+
             return result;
         })
         .padding(10.0)
