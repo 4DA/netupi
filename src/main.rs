@@ -564,10 +564,13 @@ struct StatusBar {
 }
 
 fn format_duration(dur: chrono::Duration) -> String {
-    if dur.num_hours() > 0 {
-        format!("{:02}h:{:02}m:{:02}s", dur.num_hours(), dur.num_minutes(), dur.num_seconds())
+    if dur.num_days() > 0 {
+        format!("{:02}d:{:02}h:{:02}m:{:02}s",
+                dur.num_days(), dur.num_hours() % 24, dur.num_minutes() % 60, dur.num_seconds() % 60)
+    } else if dur.num_hours() > 0 {
+        format!("{:02}h:{:02}m:{:02}s", dur.num_hours(), dur.num_minutes() % 60, dur.num_seconds() % 60)
     } else if dur.num_minutes() > 0 {
-        format!("{:02}m:{:02}s", dur.num_minutes(), dur.num_seconds())
+        format!("{:02}m:{:02}s", dur.num_minutes() % 60, dur.num_seconds() % 60)
     } else {
         format!("{:02}s", dur.num_seconds())
     }
@@ -949,7 +952,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                     let duration = format_duration(record.to.signed_duration_since(*record.from));
 
                     let time =
-                        if now.signed_duration_since(*record.from).num_days() > 0 {
+                        if now.year() > when.year() || now.day() > when.day() {
                             when.format("%b %-d %H:%M").to_string()
                         } else {
                             when.format("%H:%M").to_string()
