@@ -732,6 +732,7 @@ fn task_edit_widget() -> impl Widget<Task> {
     column.add_spacer(15.0);
 
     column.add_child(Label::new("Description").with_font(FONT_CAPTION_DESCR.clone()));
+    column.add_default_spacer();
     column.add_child(
         EditableLabel::parse()
             .lens(lens::Identity.map(
@@ -739,10 +740,7 @@ fn task_edit_widget() -> impl Widget<Task> {
                 |d: &mut Task, x: String| {
                     d.description = x;
                 },
-            ))
-            .padding(10.0)
-        ,
-    );
+            )));
 
     // DropdownSelect from widget nursery creates separated window
     // column.add_flex_child(
@@ -832,11 +830,15 @@ fn ui_builder() -> impl Widget<AppModel> {
     .with_size(18.0);
 
     focus_column.add_default_spacer();
-    focus_column.add_flex_child(Label::new("Focus").with_font(FONT_CAPTION_DESCR.clone()), 1.0);
+    focus_column.add_flex_child(Label::new("Focus")
+                                .with_font(FONT_CAPTION_DESCR.clone())
+                                .padding(10.0),
+                                1.0);
+
     focus_column.add_default_spacer();
 
     focus_column.add_child(
-        Scroll::new(List::new(|| {
+        List::new(|| {
             Container::new(
                 Label::new(|item: &(AppModel, String), _env: &_| format!("{}", item.1))
                     .align_vertical(UnitPoint::LEFT)
@@ -857,20 +859,23 @@ fn ui_builder() -> impl Widget<AppModel> {
                 model.focus_filter = what.clone();
                 model.check_update_selected();
             })
-        }))
-        .vertical()
-            .lens(lens::Identity.map(
-                // Expose shared data with children data
-                |d: &AppModel| (d.clone(), d.focus.clone()),
-                |d: &mut AppModel, x: (AppModel, Vector<String>)| {
-                    // If shared data was changed reflect the changes in our AppModel
-                    *d = x.0
-                },
-            ))
+        })
+        .with_spacing(10.0)
+        .lens(lens::Identity.map(
+            // Expose shared data with children data
+            |d: &AppModel| (d.clone(), d.focus.clone()),
+            |d: &mut AppModel, x: (AppModel, Vector<String>)| {
+                // If shared data was changed reflect the changes in our AppModel
+                *d = x.0
+            },
+        ))
     );
 
     focus_column.add_default_spacer();
-    focus_column.add_child(Label::new("Tags").with_font(FONT_CAPTION_DESCR.clone()));
+    focus_column.add_child(Label::new("Tags")
+                           .with_font(FONT_CAPTION_DESCR.clone())
+                           .padding(10.0));
+
     focus_column.add_default_spacer();
 
     focus_column.add_flex_child(
@@ -901,7 +906,8 @@ fn ui_builder() -> impl Widget<AppModel> {
 
                     data.check_update_selected();
                 })
-        }))
+        })
+        .with_spacing(10.0))
         .vertical()
         .lens(lens::Identity.map(
             // Expose shared data with children data
