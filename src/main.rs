@@ -484,6 +484,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
 
                 data.0.selected_task = task.uid.clone();
                 data.0.tasks.insert(uid.clone(), task);
+                data.0.task_sums.insert(uid.clone(), TimePrefixSum::new());
                 data.0.update_tags();
                 ctx.request_update();
             },
@@ -1036,19 +1037,23 @@ fn ui_builder() -> impl Widget<AppModel> {
         Scroll::new(
             List::new(||{
                 Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
-                    let now: DateTime<Local> = DateTime::from(SystemTime::now());
-                    let task = model.tasks.get(&record.uid).expect("unknown uid");
-                    let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
-                    let duration = format_duration(record.to.signed_duration_since(*record.from));
 
-                    let time =
-                        if now.year() > when.year() || now.day() > when.day() {
-                            when.format("%b %-d %H:%M").to_string()
-                        } else {
-                            when.format("%H:%M").to_string()
-                        };
+                    if let Some(task) = model.tasks.get(&record.uid) {
+                        let now: DateTime<Local> = DateTime::from(SystemTime::now());
+                        let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
+                        let duration = format_duration(record.to.signed_duration_since(*record.from));
 
-                    format!("{} | {} @ {}", duration, task.name, time)
+                        let time =
+                            if now.year() > when.year() || now.day() > when.day() {
+                                when.format("%b %-d %H:%M").to_string()
+                            } else {
+                                when.format("%H:%M").to_string()
+                            };
+
+                        format!("{} | {} @ {}", duration, task.name, time)
+                    } else {
+                        "".to_string()
+                    }
                 })
 
                 // .background(
