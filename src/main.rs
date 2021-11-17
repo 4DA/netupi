@@ -145,8 +145,7 @@ impl AppModel {
                 TASK_FOCUS_CURRENT => {task.task_status == TaskStatus::NEEDS_ACTION ||
                               task.task_status == TaskStatus::IN_PROCESS},
                 TASK_FOCUS_COMPLETED => task.task_status == TaskStatus::COMPLETED,
-                TASK_ARCHIVED => false,
-                TASK_FOCUS_ALL => true,
+                TASK_FOCUS_ALL => task.task_status != TaskStatus::ARCHIVED,
                 _ => panic!("Unknown focus filter {}", &self.focus_filter),
             };
 
@@ -312,8 +311,11 @@ fn stop_tracking(data: &mut AppModel) {
 }
 
 fn archive_task(model: &mut AppModel, uid: &String) {
-    model.tasks.get_mut(uid).expect(&format!("unknown task: {}", uid))
-        .task_status = TaskStatus::ARCHIVED;
+    let task = model.tasks.get_mut(uid).expect(&format!("unknown task: {}", uid));
+    task.task_status = TaskStatus::ARCHIVED;
+    if let Err(what) = db::update_task(model.db.clone(), &task) {
+        println!("db error: {}", what);
+    }
     model.update_tags();
     model.check_update_selected();
 }
