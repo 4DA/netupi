@@ -19,7 +19,8 @@ pub enum TaskStatus {
     NEEDS_ACTION,
     COMPLETED,
     IN_PROCESS,
-    CANCELLED
+    CANCELLED,
+    ARCHIVED
 }
 
 impl TaskStatus {
@@ -29,6 +30,7 @@ impl TaskStatus {
             TaskStatus::COMPLETED    => "Completed",
             TaskStatus::IN_PROCESS   => "In process",
             TaskStatus::CANCELLED    => "Cancelled",
+            TaskStatus::CANCELLED    => "Archived",
             _ => {panic!("Unknown status {:?}", self);}
         }
     }

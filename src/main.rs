@@ -126,7 +126,7 @@ const COMMAND_TASK_START:  Selector<String>    = Selector::new("tcmenu.task_star
 const COMMAND_TASK_STOP:   Selector            = Selector::new("tcmenu.task_stop");
 const COMMAND_TASK_SWITCH: Selector<String>    = Selector::new("tcmenu.task_switch");
 const COMMAND_TASK_NEW:    Selector            = Selector::new("tcmenu.task_new");
-const COMMAND_TASK_DELETE: Selector<String>    = Selector::new("tcmenu.task_delete");
+const COMMAND_TASK_ARCHIVE: Selector<String>   = Selector::new("tcmenu.task_archive");
 const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
 
 const SOUND_TASK_FINISH: &str = "res/bell.ogg";
@@ -145,6 +145,7 @@ impl AppModel {
                 TASK_FOCUS_CURRENT => {task.task_status == TaskStatus::NEEDS_ACTION ||
                               task.task_status == TaskStatus::IN_PROCESS},
                 TASK_FOCUS_COMPLETED => task.task_status == TaskStatus::COMPLETED,
+                TASK_ARCHIVED => false,
                 TASK_FOCUS_ALL => true,
                 _ => panic!("Unknown focus filter {}", &self.focus_filter),
             };
@@ -174,7 +175,9 @@ impl AppModel {
 
         for (_, task) in self.tasks.iter() {
             for tag in &task.tags {
-                self.tags.insert(tag.clone());
+                if task.task_status != TaskStatus::ARCHIVED {
+                    self.tags.insert(tag.clone());
+                }
             }
         }
     }
@@ -308,12 +311,9 @@ fn stop_tracking(data: &mut AppModel) {
     data.tracking.task_uid = None;
 }
 
-fn delete_task(model: &mut AppModel, uid: &String) {
-    if let Err(what) = db::delete_task(model.db.clone(), uid) {
-        println!("db error: {}", what);
-    }
-
-    model.tasks.remove(uid);
+fn archive_task(model: &mut AppModel, uid: &String) {
+    model.tasks.get_mut(uid).expect(&format!("unknown task: {}", uid))
+        .task_status = TaskStatus::ARCHIVED;
     model.update_tags();
     model.check_update_selected();
 }
@@ -373,7 +373,7 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
         };
 
     let uid_new = current.clone();
-    let uid_delete = current.clone();
+    let uid_archive = current.clone();
     let uid_completed = current.clone();
 
     Menu::empty()
@@ -395,9 +395,9 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
                 }),
         )
         .entry(
-            MenuItem::new(LocalizedString::new("Delete")).on_activate(
+            MenuItem::new(LocalizedString::new("Archive")).on_activate(
                 move |ctx, model: &mut AppModel, _env| {
-                    ctx.submit_command(COMMAND_TASK_DELETE.with(uid_delete.clone()));
+                    ctx.submit_command(COMMAND_TASK_ARCHIVE.with(uid_archive.clone()));
                 },
             ),
         )
@@ -502,8 +502,8 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 data.0.tasks = data.0.tasks.update(uid, task);
                 data.0.check_update_selected();
             },
-            Event::Command(cmd) if cmd.is(COMMAND_TASK_DELETE) => {
-                delete_task(&mut data.0, cmd.get(COMMAND_TASK_DELETE).unwrap());
+            Event::Command(cmd) if cmd.is(COMMAND_TASK_ARCHIVE) => {
+                archive_task(&mut data.0, cmd.get(COMMAND_TASK_ARCHIVE).unwrap());
                 ctx.request_update();
             },
             Event::Timer(id) => {
