@@ -119,13 +119,22 @@ static TASK_COLOR_BG: Color                 = Color::rgb8(80, 73, 69);
 static APP_BORDER: Color                    = Color::rgb8(60, 56, 54);
 static TASK_ACTIVE_COLOR_BG: Color          = Color::rgb8(250, 189, 47);
 
-static TIMER_INTERVAL: Duration = Duration::from_secs(10);
 static UI_TIMER_INTERVAL: Duration = Duration::from_secs(1);
 
+fn get_work_interval() -> chrono::Duration {
+    chrono::Duration::minutes(50)
+}
+
+fn get_rest_interval() -> chrono::Duration {
+    chrono::Duration::minutes(10)
+}
+
+const COMMAND_TASK_NEW:    Selector            = Selector::new("tcmenu.task_new");
 const COMMAND_TASK_START:  Selector<String>    = Selector::new("tcmenu.task_start");
 const COMMAND_TASK_STOP:   Selector            = Selector::new("tcmenu.task_stop");
+const COMMAND_TASK_PAUSE:   Selector           = Selector::new("tcmenu.task_stop");
+const COMMAND_TASK_RESUME:   Selector          = Selector::new("tcmenu.task_stop");
 const COMMAND_TASK_SWITCH: Selector<String>    = Selector::new("tcmenu.task_switch");
-const COMMAND_TASK_NEW:    Selector            = Selector::new("tcmenu.task_new");
 const COMMAND_TASK_ARCHIVE: Selector<String>   = Selector::new("tcmenu.task_archive");
 const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
 
@@ -464,7 +473,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
 
             Event::Command(cmd) if cmd.is(COMMAND_TASK_START) => {
                 start_tracking(&mut data.0, cmd.get(COMMAND_TASK_START).unwrap().clone());
-                data.0.tracking.timer_id = Rc::new(ctx.request_timer(TIMER_INTERVAL));
+                data.0.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval().to_std().unwrap()));
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_STOP) => {
                 stop_tracking(&mut data.0);
@@ -473,7 +482,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::Command(cmd) if cmd.is(COMMAND_TASK_SWITCH) => {
                 stop_tracking(&mut data.0);
                 start_tracking(&mut data.0, cmd.get(COMMAND_TASK_SWITCH).unwrap().clone());
-                data.0.tracking.timer_id = Rc::new(ctx.request_timer(TIMER_INTERVAL));
+                data.0.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval().to_std().unwrap()));
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
                 let uid = generate_uid();
@@ -582,7 +591,7 @@ fn get_status_string(d: &AppModel) -> String {
     if let Some(ref uid) = d.tracking.task_uid {
         let active_task = &d.tasks.get(uid).expect("unknown uid");
         let duration = Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
-        let total = chrono::Duration::from_std(Duration::from_secs(10)).unwrap();
+        let total = get_work_interval();
 
         format!("Active task: '{}' | Elapsed: {} / {}",
                 active_task.name, format_duration(duration), format_duration(total))
