@@ -141,7 +141,6 @@ const COMMAND_TASK_START:  Selector<String>    = Selector::new("tcmenu.task_star
 const COMMAND_TASK_STOP:   Selector            = Selector::new("tcmenu.task_stop");
 const COMMAND_TASK_PAUSE:   Selector           = Selector::new("tcmenu.task_pause");
 const COMMAND_TASK_RESUME:   Selector          = Selector::new("tcmenu.task_resume");
-const COMMAND_TASK_SWITCH: Selector<String>    = Selector::new("tcmenu.task_switch");
 const COMMAND_TASK_ARCHIVE: Selector<String>   = Selector::new("tcmenu.task_archive");
 const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
 
@@ -306,12 +305,12 @@ fn start_tracking(data: &mut AppModel, uid: String) {
 
 fn stop_tracking(data: &mut AppModel) {
     if let TrackingState::Inactive = &data.tracking.state {return};
+    if let TrackingState::Rest(_) = &data.tracking.state {return};
 
     let task = match &data.tracking.state {
         TrackingState::Active(uid) => data.tasks.get(uid).unwrap(),
         TrackingState::Paused(uid) => data.tasks.get(uid).unwrap(),
-        TrackingState::Rest(uid) => data.tasks.get(uid).unwrap(),
-        _ => panic!("to task is active"),
+        _ => panic!("bug: current task insn't active/paused"),
     };
 
     let now = Rc::new(Utc::now());
@@ -368,58 +367,68 @@ fn make_menu(_: Option<WindowId>, model: &AppModel, _: &Env) -> Menu<AppModel> {
 
 
 fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
-    let selected_task = d.tasks.get(current).expect("unknown uid");
+    let mut result = Menu::empty();
 
-    // TODO: understand ownership with 'static type bound here
+    let start_entry = {
+        let uid_for_closure = current.clone();
+        MenuItem::new(LocalizedString::new("Start tracking")).on_activate(
+            move |ctx, _d: &mut AppModel, _env| {
+                ctx.submit_command(COMMAND_TASK_START.with(uid_for_closure.clone()));
+            })
+    };
 
+    let pause_entry =
+        MenuItem::new(LocalizedString::new("Pause")).on_activate(
+            move |ctx, _d: &mut AppModel, _env| {
+                ctx.submit_command(COMMAND_TASK_PAUSE.with(()));
+            });
 
-    let start_stop_item =
-        if let TrackingState::Active(uid) = &d.tracking.state {
-            if current.eq(uid) {
-                MenuItem::new(LocalizedString::new("Stop tracking")).on_activate(
-                    move |ctx, d: &mut AppModel, _env| {
-                        ctx.submit_command(COMMAND_TASK_STOP.with(()));
-                    })
-            } else {
-                let uid_for_closure = current.clone();
-                MenuItem::new(LocalizedString::new("Switch to")).on_activate(
-                    move |ctx, d: &mut AppModel, _env| {
-                        ctx.submit_command(COMMAND_TASK_SWITCH.with(uid_for_closure.clone()));
-                    })
-            }
-        } else{
-            let uid_for_closure = current.clone();
-            MenuItem::new(LocalizedString::new("Start tracking")).on_activate(
-                move |ctx, d: &mut AppModel, _env| {
-                    ctx.submit_command(COMMAND_TASK_START.with(uid_for_closure.clone()));
-                })
-        };
+    let stop_entry = MenuItem::new(LocalizedString::new("Stop tracking")).on_activate(
+        move |ctx, _d: &mut AppModel, _env| {
+            ctx.submit_command(COMMAND_TASK_STOP.with(()));
+        });
 
-    let uid_new = current.clone();
+    let resume_entry =
+        MenuItem::new(LocalizedString::new("Resume")).on_activate(
+            move |ctx, d: &mut AppModel, _env| {
+                ctx.submit_command(COMMAND_TASK_RESUME.with(()));
+            });
+
+    match &d.tracking.state {
+        TrackingState::Active(uid) if current.eq(uid) =>
+            result = result.entry(pause_entry).entry(stop_entry),
+
+        TrackingState::Paused(uid) if current.eq(uid) =>
+            result = result.entry(resume_entry).entry(stop_entry),
+
+        TrackingState::Rest(uid) if current.eq(uid) =>
+            result = result.entry(start_entry),
+
+        _ =>
+            result = result.entry(start_entry),
+    };
+
     let uid_archive = current.clone();
     let uid_completed = current.clone();
 
-    Menu::empty()
-        .entry(
-            start_stop_item,
-        )
+    result
         .entry(
             MenuItem::new(LocalizedString::new("Mark completed"))
                 .on_activate(
-                    move |ctx, data: &mut AppModel, _env| {
+                    move |ctx, _: &mut AppModel, _env| {
                     ctx.submit_command(COMMAND_TASK_COMPLETED.with(uid_completed.clone()));
                 }),
         )
         .entry(
             MenuItem::new(LocalizedString::new("New task"))
                 .on_activate(
-                    move |ctx, model: &mut AppModel, _env| {
+                    move |ctx, _: &mut AppModel, _env| {
                     ctx.submit_command(COMMAND_TASK_NEW.with(()));
                 }),
         )
         .entry(
             MenuItem::new(LocalizedString::new("Archive")).on_activate(
-                move |ctx, model: &mut AppModel, _env| {
+                move |ctx, _: &mut AppModel, _env| {
                     ctx.submit_command(COMMAND_TASK_ARCHIVE.with(uid_archive.clone()));
                 },
             ),
@@ -485,18 +494,14 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             // https://github.com/rust-lang/rust/issues/51114
 
             Event::Command(cmd) if cmd.is(COMMAND_TASK_START) => {
+                stop_tracking(&mut data.0);
                 start_tracking(&mut data.0, cmd.get(COMMAND_TASK_START).unwrap().clone());
                 data.0.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval().to_std().unwrap()));
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_STOP) => {
                 stop_tracking(&mut data.0);
                 data.0.tracking.timer_id = Rc::new(TimerToken::INVALID);
-            },
-            Event::Command(cmd) if cmd.is(COMMAND_TASK_SWITCH) => {
-                stop_tracking(&mut data.0);
-                start_tracking(&mut data.0, cmd.get(COMMAND_TASK_SWITCH).unwrap().clone());
-                data.0.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval().to_std().unwrap()));
-            },
+            }
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
                 let uid = generate_uid();
                 let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), OrdSet::new(),
@@ -802,13 +807,11 @@ fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
     column.add_child(Label::new("Task time log").with_font(FONT_CAPTION_DESCR.clone()));
     column.add_default_spacer();
     column.add_child(
-        Label::new(|(task, sum): &(Task, TimePrefixSum), _env: &_| {
+        Label::new(|(_, sum): &(Task, TimePrefixSum), _env: &_| {
             let mut result = String::new();
 
             let now = Local::now();
             let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
-
-            let mut total_week = String::new();
 
             let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
             let total_day = get_total_time(sum, &day_start);
