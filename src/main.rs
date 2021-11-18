@@ -98,13 +98,8 @@ enum TrackingState {
 struct TrackingCtx {
     state: TrackingState,
     timestamp: Rc<DateTime<Utc>>,
-    timer_id: Rc<TimerToken>
-}
-
-#[derive(Clone, Data)]
-struct ViewState {
-    filterByTag: String,
-    filterByRelevance: String
+    timer_id: Rc<TimerToken>,
+    elapsed: Rc<chrono::Duration>,
 }
 
 #[derive(Clone, Data, Lens)]
@@ -116,7 +111,6 @@ struct AppModel {
     tags: OrdSet<String>,
     focus: Vector<String>,
     tracking: TrackingCtx,
-    view: ViewState,
     selected_task: String,
     focus_filter: String,
     tag_filter: Option<String>,
@@ -128,11 +122,12 @@ static TASK_ACTIVE_COLOR_BG: Color          = Color::rgb8(250, 189, 47);
 
 static UI_TIMER_INTERVAL: Duration = Duration::from_secs(1);
 
-fn get_work_interval() -> chrono::Duration {
+fn get_work_interval(_uid: &String) -> chrono::Duration {
     chrono::Duration::minutes(50)
+    // chrono::Duration::seconds(10)
 }
 
-fn get_rest_interval() -> chrono::Duration {
+fn get_rest_interval(_uid: &String) -> chrono::Duration {
     chrono::Duration::minutes(10)
 }
 
@@ -140,7 +135,7 @@ const COMMAND_TASK_NEW:    Selector            = Selector::new("tcmenu.task_new"
 const COMMAND_TASK_START:  Selector<String>    = Selector::new("tcmenu.task_start");
 const COMMAND_TASK_STOP:   Selector            = Selector::new("tcmenu.task_stop");
 const COMMAND_TASK_PAUSE:   Selector           = Selector::new("tcmenu.task_pause");
-const COMMAND_TASK_RESUME:   Selector          = Selector::new("tcmenu.task_resume");
+const COMMAND_TASK_RESUME:   Selector<String>  = Selector::new("tcmenu.task_resume");
 const COMMAND_TASK_ARCHIVE: Selector<String>   = Selector::new("tcmenu.task_archive");
 const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
 
@@ -275,8 +270,8 @@ pub fn main() -> anyhow::Result<()> {
         focus,
         tracking: TrackingCtx{state: TrackingState::Inactive,
                               timestamp: Rc::new(Utc::now()),
-                              timer_id: Rc::new(TimerToken::INVALID)},
-        view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
+                              timer_id: Rc::new(TimerToken::INVALID),
+                              elapsed: Rc::new(chrono::Duration::zero())},
         selected_task: selected_task,
         focus_filter: TASK_FOCUS_CURRENT.to_string(),
         tag_filter: None
@@ -298,12 +293,24 @@ pub fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn start_tracking(data: &mut AppModel, uid: String) {
+fn resume_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
     data.tracking.timestamp = Rc::new(Utc::now());
+    data.tracking.timer_id =
+        Rc::new(ctx.request_timer(get_work_interval(&uid).checked_sub(&data.tracking.elapsed)
+                                  .unwrap_or(chrono::Duration::zero()).to_std().unwrap()));
     data.tracking.state = TrackingState::Active(uid);
 }
 
-fn stop_tracking(data: &mut AppModel) {
+fn start_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
+    data.tracking.timestamp = Rc::new(Utc::now());
+    data.tracking.elapsed = Rc::new(chrono::Duration::zero());
+    data.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval(&uid).to_std().unwrap()));
+    data.tracking.state = TrackingState::Active(uid);
+}
+
+fn stop_tracking(data: &mut AppModel, new_state: TrackingState) {
+    data.tracking.timer_id = Rc::new(TimerToken::INVALID);
+
     if let TrackingState::Inactive = &data.tracking.state {return};
     if let TrackingState::Rest(_) = &data.tracking.state {return};
 
@@ -314,20 +321,24 @@ fn stop_tracking(data: &mut AppModel) {
     };
 
     let now = Rc::new(Utc::now());
-    let record = TimeRecord{from: data.tracking.timestamp.clone(), to: now.clone(), uid: task.uid.clone()};
+    let record = TimeRecord{from: data.tracking.timestamp.clone(), to: now.clone(),
+                            uid: task.uid.clone()};
 
     if let Err(what) = db::add_time_record(data.db.clone(), &record) {
         println!("db error: {}", what);
     }
-    data.records.insert(*record.from, record.clone());
-    add_record_to_sum(data.task_sums.get_mut(&task.uid).expect("unknown uid"), &record);
 
     let duration = now.signed_duration_since(data.tracking.timestamp.as_ref().clone());
+
+    data.tracking.elapsed = Rc::new(duration);
 
     println!("Task '{}' duration: {}:{}:{}", &task.name,
              duration.num_hours(), duration.num_minutes(), duration.num_seconds());
 
-    data.tracking.state = TrackingState::Inactive;
+    data.records.insert(*record.from, record.clone());
+    add_record_to_sum(data.task_sums.get_mut(&task.uid).expect("unknown uid"), &record);
+
+    data.tracking.state = new_state;
 }
 
 fn archive_task(model: &mut AppModel, uid: &String) {
@@ -388,11 +399,13 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
             ctx.submit_command(COMMAND_TASK_STOP.with(()));
         });
 
-    let resume_entry =
+    let resume_entry = {
+        let uid_for_closure = current.clone();
         MenuItem::new(LocalizedString::new("Resume")).on_activate(
             move |ctx, d: &mut AppModel, _env| {
-                ctx.submit_command(COMMAND_TASK_RESUME.with(()));
-            });
+                ctx.submit_command(COMMAND_TASK_RESUME.with(uid_for_closure.clone()));
+            })
+    };
 
     match &d.tracking.state {
         TrackingState::Active(uid) if current.eq(uid) =>
@@ -494,14 +507,28 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             // https://github.com/rust-lang/rust/issues/51114
 
             Event::Command(cmd) if cmd.is(COMMAND_TASK_START) => {
-                stop_tracking(&mut data.0);
-                start_tracking(&mut data.0, cmd.get(COMMAND_TASK_START).unwrap().clone());
-                data.0.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval().to_std().unwrap()));
+                stop_tracking(&mut data.0, TrackingState::Inactive);
+                start_tracking(&mut data.0, cmd.get(COMMAND_TASK_START).unwrap().clone(), ctx);
             },
+
             Event::Command(cmd) if cmd.is(COMMAND_TASK_STOP) => {
-                stop_tracking(&mut data.0);
+                stop_tracking(&mut data.0, TrackingState::Inactive);
+            }
+
+            Event::Command(cmd) if cmd.is(COMMAND_TASK_PAUSE) => {
+                let uid = match &data.0.tracking.state {
+                    TrackingState::Active(uid) => uid.clone(),
+                    _ => panic!("state is not active"),
+                };
+
+                stop_tracking(&mut data.0, TrackingState::Paused(uid));
                 data.0.tracking.timer_id = Rc::new(TimerToken::INVALID);
             }
+
+           Event::Command(cmd) if cmd.is(COMMAND_TASK_RESUME) => {
+               resume_tracking(&mut data.0, cmd.get(COMMAND_TASK_RESUME).unwrap().clone(), ctx);
+            }
+
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
                 let uid = generate_uid();
                 let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), OrdSet::new(),
@@ -524,11 +551,11 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
 
                 match &data.0.tracking.state {
                     TrackingState::Active(cur) if cur.eq(&uid)
-                        => stop_tracking(&mut data.0),
+                        => stop_tracking(&mut data.0, TrackingState::Inactive),
                     TrackingState::Paused(cur) if cur.eq(&uid)
-                        => stop_tracking(&mut data.0),
+                        => stop_tracking(&mut data.0, TrackingState::Inactive),
                     TrackingState::Rest(cur) if cur.eq(&uid)
-                        => stop_tracking(&mut data.0),
+                        => stop_tracking(&mut data.0, TrackingState::Inactive),
                     _ => (),
                 };
 
@@ -542,7 +569,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::Timer(id) => {
                 if *id == *data.0.tracking.timer_id {
                     play_sound(SOUND_TASK_FINISH.to_string());
-                    stop_tracking(&mut data.0);
+                    stop_tracking(&mut data.0, TrackingState::Inactive);
                 }
             }
 
@@ -610,17 +637,33 @@ fn format_duration(dur: chrono::Duration) -> String {
 }
 
 fn get_status_string(d: &AppModel) -> String {
-    if let TrackingState::Active(ref uid) = d.tracking.state {
-        let active_task = &d.tasks.get(uid).expect("unknown uid");
-        let duration = Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
-        let total = get_work_interval();
+    match d.tracking.state {
+        TrackingState::Active(ref uid) => {
+            let active_task = &d.tasks.get(uid).expect("unknown uid");
 
-        format!("Active task: '{}' | Elapsed: {} / {}",
-                active_task.name, format_duration(duration), format_duration(total))
+            let duration = d.tracking.elapsed.checked_add(&Utc::now()
+                .signed_duration_since(d.tracking.timestamp.as_ref().clone()))
+                .unwrap_or(chrono::Duration::zero());
+
+            let total = get_work_interval(uid);
+
+            format!("Active task: '{}' | Elapsed: {} / {}",
+                    active_task.name, format_duration(duration), format_duration(total))
+        },
+        TrackingState::Paused(ref uid) => {
+            let active_task = &d.tasks.get(uid).expect("unknown uid");
+
+            let total = get_work_interval(uid);
+            let elapsed = &d.tracking.elapsed;
+
+            format!("Paused task: '{}' | Elapsed: {} / {}",
+                    active_task.name,
+                    format_duration(*(&d.tracking.elapsed).clone()), format_duration(total))
+        },
+
+        _ => format!("")
     }
-    else {
-        format!("")
-    }
+
 }
 
 impl StatusBar {
@@ -1026,8 +1069,6 @@ fn ui_builder() -> impl Widget<AppModel> {
 
             let now = Local::now();
             let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
-
-            let mut total_week = String::new();
 
             let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
             let total_day = get_total_time_from_sums(&model.task_sums, &day_start);
