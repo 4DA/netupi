@@ -12,27 +12,22 @@ use rusqlite::{
 
 use anyhow::{anyhow, Context};
 
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc, TimeZone};
 
 use crate::task::*;
 
+struct TimeWrapper(DateTime<Utc>);
 
-/// Wrapper over `chrono::DateTime<Utc>`. In SQL, it's stored as an integer number of seconds since
-/// January 1, 1970.
-struct UnixTimestamp(DateTime<Utc>);
-
-impl ToSql for UnixTimestamp {
+impl ToSql for TimeWrapper {
     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(self.0.timestamp()))
+        Ok(ToSqlOutput::from(self.0.timestamp_millis()))
     }
 }
 
-impl FromSql for UnixTimestamp {
+impl FromSql for TimeWrapper {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        let t = value.as_i64()?;
-        let t = NaiveDateTime::from_timestamp(t, 0);
-        let t = DateTime::<Utc>::from_utc(t, Utc);
-        let t = UnixTimestamp(t);
+        let t = Utc.timestamp_millis(value.as_i64()?);
+        let t = TimeWrapper(t);
         Ok(t)
     }
 }
@@ -150,7 +145,7 @@ pub fn add_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::Res
 {
     conn.execute(
         "INSERT INTO time_records (ts_from, ts_to, uid) VALUES (?1, ?2, ?3)",
-        params![UnixTimestamp(*record.from), UnixTimestamp(*record.to), record.uid],
+        params![TimeWrapper(*record.from), TimeWrapper(*record.to), record.uid],
     )?;
 
     println!("time record insert ok | t: {:?}", &record);
@@ -163,10 +158,10 @@ pub fn get_time_records(conn: Rc<Connection>, from: &DateTime<Utc>, to: &DateTim
 {
     let mut stmt = conn.prepare("SELECT * FROM time_records WHERE ts_from >= ?1 AND ts_to < ?2")?;
 
-    let rows = stmt.query_map(params![UnixTimestamp(*from), UnixTimestamp(*to)],
+    let rows = stmt.query_map(params![TimeWrapper(*from), TimeWrapper(*to)],
         |row| {
-            let ts_from: UnixTimestamp = row.get(0)?;
-            let ts_to: UnixTimestamp = row.get(1)?;
+            let ts_from: TimeWrapper = row.get(0)?;
+            let ts_to: TimeWrapper = row.get(1)?;
 
             Ok(TimeRecord {
                 from: Rc::new(ts_from.0),
