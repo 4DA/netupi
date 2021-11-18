@@ -86,10 +86,17 @@ fn type_of<T>(_: T) -> &'static str {
     type_name::<T>()
 }
 
+#[derive(Debug, Clone, Data)]
+enum TrackingState {
+    Inactive,
+    Active(String),
+    Paused(String),
+    Rest(String)
+}
 
 #[derive(Debug, Clone, Data)]
-struct TrackingState {
-    task_uid: Option<String>,
+struct TrackingCtx {
+    state: TrackingState,
     timestamp: Rc<DateTime<Utc>>,
     timer_id: Rc<TimerToken>
 }
@@ -108,7 +115,7 @@ struct AppModel {
     task_sums: TaskSums,
     tags: OrdSet<String>,
     focus: Vector<String>,
-    tracking: TrackingState,
+    tracking: TrackingCtx,
     view: ViewState,
     selected_task: String,
     focus_filter: String,
@@ -132,8 +139,8 @@ fn get_rest_interval() -> chrono::Duration {
 const COMMAND_TASK_NEW:    Selector            = Selector::new("tcmenu.task_new");
 const COMMAND_TASK_START:  Selector<String>    = Selector::new("tcmenu.task_start");
 const COMMAND_TASK_STOP:   Selector            = Selector::new("tcmenu.task_stop");
-const COMMAND_TASK_PAUSE:   Selector           = Selector::new("tcmenu.task_stop");
-const COMMAND_TASK_RESUME:   Selector          = Selector::new("tcmenu.task_stop");
+const COMMAND_TASK_PAUSE:   Selector           = Selector::new("tcmenu.task_pause");
+const COMMAND_TASK_RESUME:   Selector          = Selector::new("tcmenu.task_resume");
 const COMMAND_TASK_SWITCH: Selector<String>    = Selector::new("tcmenu.task_switch");
 const COMMAND_TASK_ARCHIVE: Selector<String>   = Selector::new("tcmenu.task_archive");
 const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
@@ -267,9 +274,9 @@ pub fn main() -> anyhow::Result<()> {
         task_sums,
         tags,
         focus,
-        tracking: TrackingState{task_uid: None,
-                                timestamp: Rc::new(Utc::now()),
-                                timer_id: Rc::new(TimerToken::INVALID)},
+        tracking: TrackingCtx{state: TrackingState::Inactive,
+                              timestamp: Rc::new(Utc::now()),
+                              timer_id: Rc::new(TimerToken::INVALID)},
         view: ViewState{filterByTag: String::from(""), filterByRelevance: String::from("")},
         selected_task: selected_task,
         focus_filter: TASK_FOCUS_CURRENT.to_string(),
@@ -294,13 +301,19 @@ pub fn main() -> anyhow::Result<()> {
 
 fn start_tracking(data: &mut AppModel, uid: String) {
     data.tracking.timestamp = Rc::new(Utc::now());
-    data.tracking.task_uid = Some(uid);
+    data.tracking.state = TrackingState::Active(uid);
 }
 
 fn stop_tracking(data: &mut AppModel) {
-    if data.tracking.task_uid.is_none() {return};
+    if let TrackingState::Inactive = &data.tracking.state {return};
 
-    let mut task = data.tasks.get(data.tracking.task_uid.as_ref().unwrap()).expect("unknown uid").clone();
+    let task = match &data.tracking.state {
+        TrackingState::Active(uid) => data.tasks.get(uid).unwrap(),
+        TrackingState::Paused(uid) => data.tasks.get(uid).unwrap(),
+        TrackingState::Rest(uid) => data.tasks.get(uid).unwrap(),
+        _ => panic!("to task is active"),
+    };
+
     let now = Rc::new(Utc::now());
     let record = TimeRecord{from: data.tracking.timestamp.clone(), to: now.clone(), uid: task.uid.clone()};
 
@@ -315,8 +328,7 @@ fn stop_tracking(data: &mut AppModel) {
     println!("Task '{}' duration: {}:{}:{}", &task.name,
              duration.num_hours(), duration.num_minutes(), duration.num_seconds());
 
-    data.tasks = data.tasks.update(task.uid.clone(), task);
-    data.tracking.task_uid = None;
+    data.tracking.state = TrackingState::Inactive;
 }
 
 fn archive_task(model: &mut AppModel, uid: &String) {
@@ -362,7 +374,7 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
 
 
     let start_stop_item =
-        if let Some(uid) = &d.tracking.task_uid {
+        if let TrackingState::Active(uid) = &d.tracking.state {
             if current.eq(uid) {
                 MenuItem::new(LocalizedString::new("Stop tracking")).on_activate(
                     move |ctx, d: &mut AppModel, _env| {
@@ -430,12 +442,13 @@ impl TaskListWidget {
                         ctx.fill(bounds, &TASK_COLOR_BG);
                     }
 
-                    if let Some(ref active) = shared.tracking.task_uid {
-                        if uid.eq(active) {
+                    match shared.tracking.state {
+                        TrackingState::Active(ref active) if uid.eq(active) => {
                             ctx.stroke(bounds, &TASK_ACTIVE_COLOR_BG, 4.0);
                             return;
-                        }
-                    }
+                        },
+                        _ => (),
+                    };
 
                     ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
                 });
@@ -504,11 +517,15 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 let mut task = data.0.tasks.get(&uid).expect("unknown uid").clone();
                 task.task_status = TaskStatus::COMPLETED;
 
-                if let Some(ref cur) = data.0.tracking.task_uid {
-                    if cur.eq(&uid) {
-                        stop_tracking(&mut data.0);
-                    }
-                }
+                match &data.0.tracking.state {
+                    TrackingState::Active(cur) if cur.eq(&uid)
+                        => stop_tracking(&mut data.0),
+                    TrackingState::Paused(cur) if cur.eq(&uid)
+                        => stop_tracking(&mut data.0),
+                    TrackingState::Rest(cur) if cur.eq(&uid)
+                        => stop_tracking(&mut data.0),
+                    _ => (),
+                };
 
                 data.0.tasks = data.0.tasks.update(uid, task);
                 data.0.check_update_selected();
@@ -588,7 +605,7 @@ fn format_duration(dur: chrono::Duration) -> String {
 }
 
 fn get_status_string(d: &AppModel) -> String {
-    if let Some(ref uid) = d.tracking.task_uid {
+    if let TrackingState::Active(ref uid) = d.tracking.state {
         let active_task = &d.tasks.get(uid).expect("unknown uid");
         let duration = Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
         let total = get_work_interval();
