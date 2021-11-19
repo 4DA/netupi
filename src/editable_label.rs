@@ -25,6 +25,7 @@ use druid::{Color, Data, FontDescriptor, HotKey, KbKey, KeyOrValue, Selector, Te
 //const LOST_FOCUS: Selector = Selector::new("druid.builtin.EditableLabel-lost-focus");
 const CANCEL_EDITING: Selector = Selector::new("druid.builtin.EditableLabel-cancel-editing");
 const COMPLETE_EDITING: Selector = Selector::new("druid.builtin.EditableLabel-complete-editing");
+pub const BEGIN_EDITING: Selector = Selector::new("druid.builtin.EditableLabel-begin-editing");
 
 /// A label with text that can be edited.
 ///
@@ -164,6 +165,13 @@ impl<T: Data> Widget<T> for EditableLabel<T> {
         } else if let Event::MouseDown(_) = event {
             self.begin(ctx);
             self.text_box.event(ctx, event, &mut self.buffer, env);
+        } else if let Event::Command(cmd) = event {
+            if cmd.is(BEGIN_EDITING)
+                {
+                    ctx.request_focus();
+                    self.begin(ctx);
+                    self.text_box.event(ctx, event, &mut self.buffer, env);
+                }
         }
     }
 

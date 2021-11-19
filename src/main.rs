@@ -30,7 +30,7 @@ use druid::{
     AppLauncher, Application, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     FontWeight, FontDescriptor, FontFamily, Point,
     Menu, MenuItem, TimerToken, KeyOrValue,
-    Lens, LocalizedString, theme, UnitPoint, Widget, WidgetPod, WidgetExt, WindowDesc, WindowId,
+    Lens, LocalizedString, theme, UnitPoint, Widget, WidgetId, WidgetPod, WidgetExt, WindowDesc, WindowId,
     Command, Selector, Target};
 
 use rodio::{Decoder, OutputStream, source::Source, Sink};
@@ -139,12 +139,15 @@ const COMMAND_TASK_RESUME:   Selector<String>  = Selector::new("tcmenu.task_resu
 const COMMAND_TASK_ARCHIVE: Selector<String>   = Selector::new("tcmenu.task_archive");
 const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
 
+const COMMAND_DETAILS_REQUEST_FOCUS: Selector  = Selector::new("details_request_focus");
+
 const SOUND_TASK_FINISH: &str = "res/bell.ogg";
 
 const TASK_FOCUS_CURRENT: &str = "Current";
 const TASK_FOCUS_COMPLETED: &str = "Completed";
 const TASK_FOCUS_ALL: &str = "All";
 
+const TASK_NAME_EDIT_WIDGET: WidgetId = WidgetId::reserved(9247);
 
 impl AppModel {
     fn get_uids_filtered(&self) -> impl Iterator<Item = String> + '_ {
@@ -539,6 +542,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 data.0.tasks.insert(uid.clone(), task);
                 data.0.task_sums.insert(uid.clone(), TimePrefixSum::new());
                 data.0.update_tags();
+                ctx.submit_command(COMMAND_DETAILS_REQUEST_FOCUS.with(()));
                 ctx.request_update();
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_COMPLETED) => {
@@ -728,6 +732,7 @@ fn task_edit_widget() -> impl Widget<Task> {
             .with_default_spacer()
             .with_child(
                 EditableLabel::parse()
+                    .with_id(TASK_NAME_EDIT_WIDGET)
                     .padding(10.0)
                     .fix_height(50.0)
                     .lens(lens::Identity.map(
@@ -832,6 +837,24 @@ fn task_edit_widget() -> impl Widget<Task> {
     return column;
 }
 
+struct TaskDetailsController;
+
+impl<T, W: Widget<T>> Controller<T, W> for TaskDetailsController {
+    fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
+
+        match event {
+            Event::Command(cmd) if cmd.is(COMMAND_DETAILS_REQUEST_FOCUS) => {
+                let command = Command::new(editable_label::BEGIN_EDITING, (),
+                                           Target::Widget(TASK_NAME_EDIT_WIDGET));
+                ctx.submit_command(command);
+
+            },
+
+            _ => child.event(ctx, event, data, env),
+        }
+    }
+}
+
 fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
     static FONT_CAPTION_DESCR: FontDescriptor =
         FontDescriptor::new(FontFamily::SYSTEM_UI)
@@ -886,7 +909,7 @@ fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
             }))
     );
 
-    return column;
+    return column.controller(TaskDetailsController);
 }
 
 fn ui_builder() -> impl Widget<AppModel> {
