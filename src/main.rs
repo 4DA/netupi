@@ -40,14 +40,10 @@ use std::io::BufReader;
 use std::fs::File;
 use std::fs;
 use std::rc::Rc;
-
 use std::any::type_name;
-
-
 use std::time::Instant;
 use std::time::SystemTime;
 use std::thread;
-
 use std::env;
 
 // uid stuff

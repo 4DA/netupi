@@ -1,5 +1,7 @@
 use std::rc::Rc;
 use std::iter::FromIterator;
+use std::path::PathBuf;
+use std::fs;
 
 use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
 use serde::ser::{Serialize, Serializer, SerializeSeq, SerializeMap};
@@ -9,6 +11,8 @@ use rusqlite::{
     types::{FromSql, FromSqlResult, ToSqlOutput, ValueRef},
     Connection, ToSql, Transaction, Result, NO_PARAMS
 };
+
+use dirs::config_dir;
 
 use anyhow::{anyhow, Context};
 
@@ -33,7 +37,17 @@ impl FromSql for TimeWrapper {
 }
 
 pub fn init() -> anyhow::Result<Connection>{
-    let conn = Connection::open("time_tracker.db")?;
+    let mut path_buf = dirs::config_dir().unwrap_or(PathBuf::new());
+    path_buf.push("netupi");
+
+    let dir = path_buf.to_str().unwrap();
+    fs::create_dir_all(dir)?;
+
+    path_buf.push("time_tracker.db");
+
+    let file_path = path_buf.to_str().unwrap();
+
+    let conn = Connection::open(file_path)?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tasks (
