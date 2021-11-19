@@ -369,12 +369,29 @@ fn make_menu(_: Option<WindowId>, model: &AppModel, _: &Env) -> Menu<AppModel> {
             .on_activate(move |_ctx, data, _env| {Application::global().quit();})
     );
     
-    base.entry(file)
+    let mut task = make_task_menu(model, &model.selected_task);
+    task = task.rebuild_on(|prev: &AppModel, now: &AppModel, _env: &Env| {
+        !prev.tasks.same(&now.tasks) |
+        !prev.selected_task.same(&now.selected_task) |
+        !prev.tracking.same(&now.tracking)
+    });
+
+    base.entry(file).entry(task)
 }
 
 
-fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
-    let mut result = Menu::empty();
+fn make_task_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
+    let mut result = Menu::new(LocalizedString::new("Task"));
+
+    let new_task_entry = MenuItem::new(LocalizedString::new("New task"))
+                .on_activate(
+                    move |ctx, _: &mut AppModel, _env| {
+                    ctx.submit_command(COMMAND_TASK_NEW.with(()));
+                    });
+
+    if current.is_empty() {
+        return result.entry(new_task_entry);
+    }
 
     let start_entry = {
         let uid_for_closure = current.clone();
@@ -429,11 +446,7 @@ fn make_task_context_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
                 }),
         )
         .entry(
-            MenuItem::new(LocalizedString::new("New task"))
-                .on_activate(
-                    move |ctx, _: &mut AppModel, _env| {
-                    ctx.submit_command(COMMAND_TASK_NEW.with(()));
-                }),
+            new_task_entry,
         )
         .entry(
             MenuItem::new(LocalizedString::new("Archive")).on_activate(
@@ -608,7 +621,7 @@ impl<W: Widget<(AppModel, String)>> Controller<(AppModel, String), W> for Contex
     ) {
         match event {
             Event::MouseDown(ref mouse) if mouse.button.is_right() => {
-                ctx.show_context_menu(make_task_context_menu(&data.0, &data.1), mouse.pos);
+                ctx.show_context_menu(make_task_menu(&data.0, &data.1), mouse.pos);
             }
             _ => child.event(ctx, event, data, env),
         }
