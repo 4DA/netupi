@@ -281,13 +281,12 @@ fn start_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
 fn stop_tracking(data: &mut AppModel, new_state: TrackingState) {
     data.tracking.timer_id = Rc::new(TimerToken::INVALID);
 
-    if let TrackingState::Inactive = &data.tracking.state {return};
-    if let TrackingState::Rest(_) = &data.tracking.state {return};
-
     let task = match &data.tracking.state {
         TrackingState::Active(uid) => data.tasks.get(uid).unwrap(),
-        TrackingState::Paused(uid) => data.tasks.get(uid).unwrap(),
-        _ => panic!("bug: current task insn't active/paused"),
+        _ => {
+            data.tracking.state = new_state;
+            return;
+        }
     };
 
     let now = Rc::new(Utc::now());
