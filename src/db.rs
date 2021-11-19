@@ -3,20 +3,19 @@ use std::iter::FromIterator;
 use std::path::PathBuf;
 use std::fs;
 
-use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
-use serde::ser::{Serialize, Serializer, SerializeSeq, SerializeMap};
+use druid::im::{OrdSet};
 
 use rusqlite::{
     params,
     types::{FromSql, FromSqlResult, ToSqlOutput, ValueRef},
-    Connection, ToSql, Transaction, Result, NO_PARAMS
+    Connection, ToSql
 };
 
-use dirs::config_dir;
+use dirs;
 
-use anyhow::{anyhow, Context};
+use anyhow;
 
-use chrono::{DateTime, Duration, NaiveDateTime, Utc, TimeZone};
+use chrono::{DateTime, Utc, TimeZone};
 
 use crate::task::*;
 
@@ -59,7 +58,7 @@ pub fn init() -> anyhow::Result<Connection>{
              status text,
              seq integer
          )",
-        NO_PARAMS,
+        [],
     )?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS time_records (
@@ -67,7 +66,7 @@ pub fn init() -> anyhow::Result<Connection>{
              ts_to INTEGER,
              uid TEXT NOT NULL
          )",
-        NO_PARAMS,
+        [],
     )?;
 
     Ok(conn)
@@ -101,6 +100,7 @@ pub fn update_task(conn: Rc<Connection>, task: &Task) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(unused)]
 pub fn delete_task(conn: Rc<Connection>, uid: &String) -> anyhow::Result<()> {
     conn.execute(
         "DELETE FROM tasks WHERE uid = ?1;",
@@ -118,7 +118,7 @@ pub fn get_tasks(conn: Rc<Connection>) -> anyhow::Result<(TaskMap, TagSet)>
         "SELECT * FROM tasks;",
     )?;
 
-    let sqtasks = stmt.query_map(NO_PARAMS, |row| {
+    let sqtasks = stmt.query_map([], |row| {
         let stat_str: String = row.get(5)?;
         let tag_str: String = row.get(3)?;
         let arr = serde_json::from_str::<Vec<String>>(&tag_str).unwrap();

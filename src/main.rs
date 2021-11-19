@@ -18,30 +18,25 @@
 
 use core::time::Duration;
 
-// use druid::piet::{PietTextLayoutBuilder, TextStorage};
-use druid::text::{Attribute, RichText, TextStorage};
-use druid::piet::{PietTextLayoutBuilder, TextStorage as PietTextStorage};
 use druid::widget::prelude::*;
-use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
+use druid::im::{vector, Vector, OrdSet};
 use druid::lens::{self, LensExt};
-use druid::widget::{Button, CrossAxisAlignment, Flex, Label, SizedBox, RawLabel, List, Scroll, Controller, ControllerHost, Container, Painter, Radio, TextBox};
+use druid::widget::{CrossAxisAlignment, Flex, Label, SizedBox, List, Scroll, Controller, ControllerHost, Container, Painter, Radio};
 
 use druid::{
     AppLauncher, Application, Color, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     FontWeight, FontDescriptor, FontFamily, Point,
     Menu, MenuItem, TimerToken, KeyOrValue,
-    Lens, LocalizedString, theme, UnitPoint, Widget, WidgetId, WidgetPod, WidgetExt, WindowDesc, WindowId,
+    Lens, LocalizedString, UnitPoint, Widget, WidgetId, WidgetPod, WidgetExt, WindowDesc, WindowId,
     Command, Selector, Target};
 
-use rodio::{Decoder, OutputStream, source::Source, Sink};
+use rodio::{Decoder, OutputStream, Sink};
 
 // std stuff
 use std::io::BufReader;
 use std::fs::File;
-use std::fs;
 use std::rc::Rc;
 use std::any::type_name;
-use std::time::Instant;
 use std::time::SystemTime;
 use std::thread;
 use std::env;
@@ -49,8 +44,6 @@ use std::env;
 // uid stuff
 use uuid::v1::{Timestamp, Context};
 use uuid::Uuid;
-
-use anyhow::{anyhow};
 
 // chrono
 use chrono::prelude::*;
@@ -64,11 +57,7 @@ use crate::maybe::Maybe;
 mod task;
 use task::*;
 
-mod icalendar;
-use icalendar::parse_ical;
-
 mod db;
-use db::*;
 
 fn generate_uid() -> String {
     let context = Context::new(42);
@@ -78,6 +67,7 @@ fn generate_uid() -> String {
     return uuid.to_string();
 }
 
+#[allow(unused)]
 fn type_of<T>(_: T) -> &'static str {
     type_name::<T>()
 }
@@ -151,10 +141,10 @@ impl AppModel {
             let task = self.tasks.get(uid).expect("unknown uid");
 
             let focus_ok = match self.focus_filter.as_str() {
-                TASK_FOCUS_CURRENT => {task.task_status == TaskStatus::NEEDS_ACTION ||
-                              task.task_status == TaskStatus::IN_PROCESS},
-                TASK_FOCUS_COMPLETED => task.task_status == TaskStatus::COMPLETED,
-                TASK_FOCUS_ALL => task.task_status != TaskStatus::ARCHIVED,
+                TASK_FOCUS_CURRENT => {task.task_status == TaskStatus::NeedsAction ||
+                              task.task_status == TaskStatus::InProcess},
+                TASK_FOCUS_COMPLETED => task.task_status == TaskStatus::Completed,
+                TASK_FOCUS_ALL => task.task_status != TaskStatus::Archived,
                 _ => panic!("Unknown focus filter {}", &self.focus_filter),
             };
 
@@ -183,7 +173,7 @@ impl AppModel {
 
         for (_, task) in self.tasks.iter() {
             for tag in &task.tags {
-                if task.task_status != TaskStatus::ARCHIVED {
+                if task.task_status != TaskStatus::Archived {
                     self.tags.insert(tag.clone());
                 }
             }
@@ -191,12 +181,6 @@ impl AppModel {
     }
 }
 
-fn convert_ts(optstr: Option<String>) -> Vector<String> {
-    match optstr {
-        Some(st) => vector![st],
-        None => Vector::new(),
-    }
-}
 
 fn play_sound(file: String) {
     thread::spawn(move || {
@@ -221,24 +205,14 @@ fn play_sound(file: String) {
 }
 
 pub fn main() -> anyhow::Result<()> {
-
-    let args: Vec<String> = env::args().collect();
+    let _args: Vec<String> = env::args().collect();
 
     let conn = db::init()?;
     let db = Rc::new(conn);
 
-    let file_path = match args.len() {
-        // no arguments passed
-        1 => String::from("/home/dc/Tasks.ics"),
-        2 => args[1].clone(),
-        _ => args[1].clone(),
-    };
-
     let focus = vector![TASK_FOCUS_CURRENT.to_string(),
                         TASK_FOCUS_COMPLETED.to_string(),
                         TASK_FOCUS_ALL.to_string()];
-
-    // let (tasks, tags) = parse_ical(file_path);
 
     let (tasks, tags) = db::get_tasks(db.clone())?;
     let records = db::get_time_records(db.clone(),
@@ -339,7 +313,7 @@ fn stop_tracking(data: &mut AppModel, new_state: TrackingState) {
 
 fn archive_task(model: &mut AppModel, uid: &String) {
     let task = model.tasks.get_mut(uid).expect(&format!("unknown task: {}", uid));
-    task.task_status = TaskStatus::ARCHIVED;
+    task.task_status = TaskStatus::Archived;
     if let Err(what) = db::update_task(model.db.clone(), &task) {
         println!("db error: {}", what);
     }
@@ -349,24 +323,23 @@ fn archive_task(model: &mut AppModel, uid: &String) {
 
 #[allow(unused_assignments)]
 fn make_menu(_: Option<WindowId>, model: &AppModel, _: &Env) -> Menu<AppModel> {
-    let mut base = Menu::empty();
+    let base = Menu::empty();
 
-    // base.rebuild_on(|old_data, data, _env| old_data.menu_count != data.menu_count)
     let mut file = Menu::new(LocalizedString::new("File"));
 
     file = file.entry(
         MenuItem::new(LocalizedString::new("Import ical"))
-            .on_activate(move |_ctx, data, _env| {})
+            .on_activate(move |_ctx, _data, _env| {})
     );
 
     file = file.entry(
         MenuItem::new(LocalizedString::new("Export ical"))
-            .on_activate(move |_ctx, data, _env| {})
+            .on_activate(move |_ctx, _data, _env| {})
     );
     
     file = file.entry(
         MenuItem::new(LocalizedString::new("Exit"))
-            .on_activate(move |_ctx, data, _env| {Application::global().quit();})
+            .on_activate(move |_ctx, _data, _env| {Application::global().quit();})
     );
     
     let mut task = make_task_menu(model, &model.selected_task);
@@ -415,7 +388,7 @@ fn make_task_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
     let resume_entry = {
         let uid_for_closure = current.clone();
         MenuItem::new(LocalizedString::new("Resume")).on_activate(
-            move |ctx, d: &mut AppModel, _env| {
+            move |ctx, _d: &mut AppModel, _env| {
                 ctx.submit_command(COMMAND_TASK_RESUME.with(uid_for_closure.clone()));
             })
     };
@@ -541,7 +514,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
                 let uid = generate_uid();
                 let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), OrdSet::new(),
-                                     0, TaskStatus::NEEDS_ACTION, 0);
+                                     0, TaskStatus::NeedsAction, 0);
 
                 if let Err(what) = db::add_task(data.0.db.clone(), &task) {
                     println!("db error: {}", what);
@@ -557,7 +530,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::Command(cmd) if cmd.is(COMMAND_TASK_COMPLETED) => {
                 let uid = cmd.get(COMMAND_TASK_COMPLETED).unwrap().clone();
                 let mut task = data.0.tasks.get(&uid).expect("unknown uid").clone();
-                task.task_status = TaskStatus::COMPLETED;
+                task.task_status = TaskStatus::Completed;
 
                 match &data.0.tracking.state {
                     TrackingState::Active(cur) if cur.eq(&uid)
@@ -663,12 +636,10 @@ fn get_status_string(d: &AppModel) -> String {
         TrackingState::Paused(ref uid) => {
             let active_task = &d.tasks.get(uid).expect("unknown uid");
 
-            let total = get_work_interval(uid);
-            let elapsed = &d.tracking.elapsed;
-
             format!("Paused task: '{}' | Elapsed: {} / {}",
                     active_task.name,
-                    format_duration(*(&d.tracking.elapsed).clone()), format_duration(total))
+                    format_duration(*(&d.tracking.elapsed).clone()),
+                    format_duration(get_work_interval(uid)))
         },
 
         _ => format!("")
@@ -758,10 +729,10 @@ fn task_edit_widget() -> impl Widget<Task> {
         Flex::row()
             .with_child(Label::new("Status") .with_font(FONT_CAPTION_DESCR.clone()))
             .with_default_spacer()
-            .with_child(Radio::new("needs action" , TaskStatus::NEEDS_ACTION))
-            .with_child(Radio::new("in process"   , TaskStatus::IN_PROCESS))
-            .with_child(Radio::new("completed"    , TaskStatus::COMPLETED))
-            .with_child(Radio::new("cancelled"    , TaskStatus::CANCELLED))
+            .with_child(Radio::new("needs action" , TaskStatus::NeedsAction))
+            .with_child(Radio::new("in process"   , TaskStatus::InProcess))
+            .with_child(Radio::new("completed"    , TaskStatus::Completed))
+            .with_child(Radio::new("cancelled"    , TaskStatus::Cancelled))
             .lens(lens::Map::new(
                 |task: &Task| task.task_status.clone(),
                 |task: &mut Task, status| task.task_status = status))
@@ -787,7 +758,7 @@ fn task_edit_widget() -> impl Widget<Task> {
                         .align_horizontal(UnitPoint::LEFT)
                         .padding(10.0))
                 .background(
-                    Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
+                    Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
                         let bounds = ctx.size().to_rect();
                         ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
                     }))
@@ -823,6 +794,7 @@ fn task_edit_widget() -> impl Widget<Task> {
     column.add_default_spacer();
     column.add_child(
         EditableLabel::parse()
+            .expand_width()
             .lens(lens::Identity.map(
                 |d: &Task| d.description.clone(),
                 |d: &mut Task, x: String| {
@@ -833,10 +805,10 @@ fn task_edit_widget() -> impl Widget<Task> {
     // DropdownSelect from widget nursery creates separated window
     // column.add_flex_child(
     //     DropdownSelect::new(vec![
-    //         ("needs action" , TaskStatus::NEEDS_ACTION),
-    //         ("in process"   , TaskStatus::IN_PROCESS),
-    //         ("completed"    , TaskStatus::COMPLETED),
-    //         ("cancelled"    , TaskStatus::CANCELLED),
+    //         ("needs action" , TaskStatus::NeedsAction),
+    //         ("in process"   , TaskStatus::InProcess),
+    //         ("completed"    , TaskStatus::Completed),
+    //         ("cancelled"    , TaskStatus::Cancelled),
     //     ])
     //     .align_left()
     //     .lens(Task::task_status),
@@ -912,7 +884,7 @@ fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
         })
         .padding(10.0)
         .background(
-            Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
+            Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
                 let bounds = ctx.size().to_rect();
                 ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
             }))

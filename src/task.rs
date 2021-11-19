@@ -1,12 +1,11 @@
 use std::ops::Add;
 use std::rc::Rc;
-use druid::lens::{self, LensExt};
 use druid::{Data, Lens};
 use chrono::prelude::*;
 use chrono::Duration;
-use druid::im::{vector, Vector, ordset, OrdSet, OrdMap, HashMap};
+use druid::im::{OrdSet, OrdMap};
 use serde::{Serialize, Serializer, Deserialize};
-use serde::ser::{SerializeSeq, SerializeMap};
+use serde::ser::{SerializeSeq};
 
 pub type TagSet        = OrdSet<String>;
 pub type TaskMap       = OrdMap<String, Task>;
@@ -16,21 +15,22 @@ pub type TaskSums      = OrdMap::<String, TimePrefixSum>;
 
 #[derive(Debug, Clone, Data, PartialEq, Serialize, Deserialize)]
 pub enum TaskStatus {
-    NEEDS_ACTION,
-    COMPLETED,
-    IN_PROCESS,
-    CANCELLED,
-    ARCHIVED
+    NeedsAction,
+    Completed,
+    InProcess,
+    Cancelled,
+    Archived
 }
 
 impl TaskStatus {
+    #[allow(unused)]
     fn to_string(&self) -> &str {
         match &self {
-            TaskStatus::NEEDS_ACTION => "Needs action",
-            TaskStatus::COMPLETED    => "Completed",
-            TaskStatus::IN_PROCESS   => "In process",
-            TaskStatus::CANCELLED    => "Cancelled",
-            TaskStatus::CANCELLED    => "Archived",
+            TaskStatus::NeedsAction => "Needs action",
+            TaskStatus::Completed    => "Completed",
+            TaskStatus::InProcess   => "In process",
+            TaskStatus::Cancelled    => "Cancelled",
+            TaskStatus::Archived    => "Archived",
             _ => {panic!("Unknown status {:?}", self);}
         }
     }
@@ -112,11 +112,6 @@ where
     }
 }
 
-pub enum PrefixSumFilter {
-    ALL,
-    TASK(String)
-}
-
 pub fn get_total_time(prefix_sum: &TimePrefixSum, from: &DateTime::<Utc>)
                       -> chrono::Duration
 {
@@ -148,7 +143,7 @@ pub fn add_record_to_sum(sum_map: &mut TimePrefixSum, record: &TimeRecord) {
     sum_map.insert(*record.from, last);
 }
 
-pub fn build_time_prefix_sum(tasks: &TaskMap, records: &TimeRecordMap, filter: String)
+pub fn build_time_prefix_sum(_tasks: &TaskMap, records: &TimeRecordMap, filter: String)
                              -> TimePrefixSum
 {
     let mut result = TimePrefixSum::new();
@@ -157,7 +152,7 @@ pub fn build_time_prefix_sum(tasks: &TaskMap, records: &TimeRecordMap, filter: S
 
     let mut psum = Duration::zero();
 
-    for (k, v) in records {
+    for (_k, v) in records {
         if filter.eq(&v.uid) {
             psum = psum + v.to.signed_duration_since(*v.from);
             result.insert(*v.from, TimePrefix::new(&psum));

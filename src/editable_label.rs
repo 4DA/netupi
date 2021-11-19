@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(unused)]
+
 //! A label that can be edited.
 //!
 //! This is a bit hacky, and depends on implementation details of other widgets.

@@ -170,6 +170,13 @@ fn props_by_name(prop_vec: &Vec<Property>) -> PropertyMap {
     return result;
 }
 
+fn convert_ts(optstr: Option<String>) -> Vector<String> {
+    match optstr {
+        Some(st) => vector![st],
+        None => Vector::new(),
+    }
+}
+
 // fn todos_by_uid(todo_vec: &Vec<IcalTodo>) -> TodoMap {
 //     let mut result = TodoMap::new();
 
