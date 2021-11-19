@@ -199,12 +199,6 @@ fn convert_ts(optstr: Option<String>) -> Vector<String> {
     }
 }
 
-fn get_any_task_uid(tasks: &TaskMap) -> String {
-    let null_uid = "".to_string();
-    tasks.keys().nth(0).unwrap_or(&null_uid).clone()
-}
-
-
 fn play_sound(file: String) {
     thread::spawn(move || {
         // Get a output stream handle to the default physical sound device
@@ -259,7 +253,7 @@ pub fn main() -> anyhow::Result<()> {
         task_sums.insert(uid.clone(), sum);
     }
 
-    let selected_task = get_any_task_uid(&tasks);
+    let selected_task = "".to_string();
 
     let mut data = AppModel{
         db,
@@ -276,6 +270,9 @@ pub fn main() -> anyhow::Result<()> {
         focus_filter: TASK_FOCUS_CURRENT.to_string(),
         tag_filter: None
     };
+
+    let selected = data.get_uids_filtered().nth(0).unwrap_or("".to_string()).clone();
+    data.selected_task = selected;
 
     // TODO should be done in ctor
     data.update_tags();
