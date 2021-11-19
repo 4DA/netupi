@@ -77,7 +77,7 @@ enum TrackingState {
     Inactive,
     Active(String),
     Paused(String),
-    Rest(String)
+    Break(String)
 }
 
 #[derive(Debug, Clone, Data)]
@@ -105,6 +105,7 @@ struct AppModel {
 static TASK_COLOR_BG: Color                 = Color::rgb8(80, 73, 69);
 static APP_BORDER: Color                    = Color::rgb8(60, 56, 54);
 static TASK_ACTIVE_COLOR_BG: Color          = Color::rgb8(250, 189, 47);
+static TASK_REST_COLOR_BG: Color            = Color::rgb8(131, 162, 152);
 
 static UI_TIMER_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -115,6 +116,7 @@ fn get_work_interval(_uid: &String) -> chrono::Duration {
 
 fn get_rest_interval(_uid: &String) -> chrono::Duration {
     chrono::Duration::minutes(10)
+    // chrono::Duration::seconds(10)
 }
 
 const COMMAND_TASK_NEW:    Selector            = Selector::new("tcmenu.task_new");
@@ -263,6 +265,13 @@ pub fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn start_rest(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
+    data.tracking.timestamp = Rc::new(Utc::now());
+    data.tracking.timer_id =
+        Rc::new(ctx.request_timer(get_rest_interval(&uid).to_std().unwrap()));
+    data.tracking.state = TrackingState::Break(uid);
+}
+
 fn resume_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
     data.tracking.timestamp = Rc::new(Utc::now());
     data.tracking.timer_id =
@@ -399,7 +408,7 @@ fn make_task_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
         TrackingState::Paused(uid) if current.eq(uid) =>
             result = result.entry(resume_entry).entry(stop_entry),
 
-        TrackingState::Rest(uid) if current.eq(uid) =>
+        TrackingState::Break(uid) if current.eq(uid) =>
             result = result.entry(start_entry),
 
         _ =>
@@ -448,6 +457,10 @@ impl TaskListWidget {
                     match shared.tracking.state {
                         TrackingState::Active(ref active) if uid.eq(active) => {
                             ctx.stroke(bounds, &TASK_ACTIVE_COLOR_BG, 4.0);
+                            return;
+                        },
+                        TrackingState::Break(ref rest) if uid.eq(rest) => {
+                            ctx.stroke(bounds, &TASK_REST_COLOR_BG, 4.0);
                             return;
                         },
                         _ => (),
@@ -535,9 +548,9 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                     TrackingState::Active(cur) if cur.eq(&uid)
                         => stop_tracking(&mut data.0, TrackingState::Inactive),
                     TrackingState::Paused(cur) if cur.eq(&uid)
-                        => stop_tracking(&mut data.0, TrackingState::Inactive),
-                    TrackingState::Rest(cur) if cur.eq(&uid)
-                        => stop_tracking(&mut data.0, TrackingState::Inactive),
+                        => data.0.tracking.state = TrackingState::Inactive,
+                    TrackingState::Break(cur) if cur.eq(&uid)
+                        => data.0.tracking.state = TrackingState::Inactive,
                     _ => (),
                 };
 
@@ -551,7 +564,15 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::Timer(id) => {
                 if *id == *data.0.tracking.timer_id {
                     play_sound(SOUND_TASK_FINISH.to_string());
-                    stop_tracking(&mut data.0, TrackingState::Inactive);
+
+                    match data.0.tracking.state.clone() {
+                        TrackingState::Active(uid) => {
+                            stop_tracking(&mut data.0, TrackingState::Inactive);
+                            start_rest(&mut data.0, uid, ctx);
+                        },
+                        TrackingState::Break(_) => {data.0.tracking.state = TrackingState::Inactive},
+                        _ => {},
+                    };
                 }
             }
 
@@ -629,13 +650,24 @@ fn get_status_string(d: &AppModel) -> String {
 
             let total = get_work_interval(uid);
 
-            format!("Active task: '{}' | Elapsed: {} / {}",
+            format!("Active: '{}' | Elapsed: {} / {}",
                     active_task.name, format_duration(duration), format_duration(total))
+        },
+        TrackingState::Break(ref uid) => {
+            let rest_task = &d.tasks.get(uid).expect("unknown uid");
+
+            let duration =
+                Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
+
+            let total = get_rest_interval(uid);
+
+            format!("Break: '{}' | Elapsed: {} / {}",
+                    rest_task.name, format_duration(duration), format_duration(total))
         },
         TrackingState::Paused(ref uid) => {
             let active_task = &d.tasks.get(uid).expect("unknown uid");
 
-            format!("Paused task: '{}' | Elapsed: {} / {}",
+            format!("Paused: '{}' | Elapsed: {} / {}",
                     active_task.name,
                     format_duration(*(&d.tracking.elapsed).clone()),
                     format_duration(get_work_interval(uid)))
