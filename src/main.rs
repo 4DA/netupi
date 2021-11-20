@@ -34,7 +34,6 @@ use rodio::{Decoder, OutputStream, Sink};
 
 // std stuff
 use std::io::BufReader;
-use std::fs::File;
 use std::rc::Rc;
 use std::any::type_name;
 use std::time::SystemTime;
@@ -129,7 +128,15 @@ const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_comp
 
 const COMMAND_DETAILS_REQUEST_FOCUS: Selector  = Selector::new("details_request_focus");
 
-const SOUND_TASK_FINISH: &str = "res/bell.ogg";
+pub type BellBytes = &'static [u8; 5016];
+
+#[cfg(target_os = "macos")]
+static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
+#[cfg(target_os = "linux")]
+static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
+#[cfg(target_os = "windows")]
+const SOUND_TASK_FINISH: BellBytes = std::include_bytes!("..\\res\\bell.ogg");
+
 
 const TASK_FOCUS_CURRENT: &str = "Current";
 const TASK_FOCUS_COMPLETED: &str = "Completed";
@@ -191,14 +198,15 @@ impl AppModel {
 }
 
 
-fn play_sound(file: String) {
+fn play_sound(bytes: &'static [u8]) {
     thread::spawn(move || {
+        let bytes = std::io::Cursor::new(bytes.clone());
         // Get a output stream handle to the default physical sound device
         let (_stream, stream_handle) = OutputStream::try_default().unwrap();
         // Load a sound from a file, using a path relative to Cargo.toml
-        let file = BufReader::new(File::open(file).unwrap());
+        let buf = BufReader::new(bytes);
         // Decode that sound file into a source
-        let source = Decoder::new(file).unwrap();
+        let source = Decoder::new(buf).unwrap();
 
         let sink = Sink::try_new(&stream_handle).unwrap();
         sink.append(source);
@@ -570,7 +578,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             },
             Event::Timer(id) => {
                 if *id == *data.0.tracking.timer_id {
-                    play_sound(SOUND_TASK_FINISH.to_string());
+                    play_sound(SOUND_TASK_FINISH);
 
                     match data.0.tracking.state.clone() {
                         TrackingState::Active(uid) => {
