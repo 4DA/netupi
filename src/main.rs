@@ -268,9 +268,9 @@ pub fn main() -> anyhow::Result<()> {
     data.update_tags();
 
     let main_window = WindowDesc::new(ui_builder())
-        .window_size((1280.0, 800.0))
+        .window_size((1000.0, 800.0))
         .menu(make_menu)
-        .title(LocalizedString::new("time-tracker-window-title").with_placeholder("Time tracker"));
+        .title(LocalizedString::new("netupi-window-title").with_placeholder("netupi"));
     
     AppLauncher::with_window(main_window)
         .log_to_console()
@@ -956,58 +956,68 @@ fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
 }
 
 fn activity_log_widget() -> impl Widget<AppModel> {
+    static FONT_CAPTION_DESCR: FontDescriptor =
+        FontDescriptor::new(FontFamily::SYSTEM_UI)
+        .with_weight(FontWeight::BOLD)
+        .with_size(14.0);
+
     Flex::row()
         .with_child(
-            List::new(||{
-                Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
-
-                    if let Some(task) = model.tasks.get(&record.uid) {
-                        format!("{}", task.name)
-                    } else {
-                        "".to_string()
-                    }
+            Flex::column().with_child(Label::new("Task")
+                                      .with_font(FONT_CAPTION_DESCR.clone()))
+            .with_child(
+                List::new(||{
+                    Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
+                        if let Some(task) = model.tasks.get(&record.uid) {
+                            format!("{}", task.name)
+                        } else {
+                            "".to_string()
+                        }
+                    })
                 })
-            })
                 .with_spacing(10.0)
-                .padding(10.0))
+                .padding(10.0)))
 
         .with_child(
-            List::new(||{
-                Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
-
-                    if let Some(_) = model.tasks.get(&record.uid) {
-                        format_duration(record.to.signed_duration_since(*record.from))
-                    } else {
-                        "".to_string()
-                    }
+            Flex::column().with_child(Label::new("Duration")
+                                      .with_font(FONT_CAPTION_DESCR.clone()))
+            .with_child(
+                List::new(||{
+                    Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
+                        if let Some(_) = model.tasks.get(&record.uid) {
+                            format_duration(record.to.signed_duration_since(*record.from))
+                        } else {
+                            "".to_string()
+                        }
+                    })
                 })
-            })
                 .with_spacing(10.0)
-                .padding(10.0))
+                .padding(10.0)))
         .with_child(
-            List::new(||{
-                Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
+            Flex::column().with_child(Label::new("When")
+                                      .with_font(FONT_CAPTION_DESCR.clone()))
+            .with_child(
+                List::new(||{
+                    Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
+                        if let Some(_) = model.tasks.get(&record.uid) {
+                            let now: DateTime<Local> = DateTime::from(SystemTime::now());
+                            let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
 
-                    if let Some(_) = model.tasks.get(&record.uid) {
-                        let now: DateTime<Local> = DateTime::from(SystemTime::now());
-                        let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
-
-                        let time =
-                            if now.year() > when.year() || now.day() > when.day() {
+                            let time = if now.year() > when.year() || now.day() > when.day() {
                                 when.format("%b %-d %H:%M").to_string()
                             } else {
                                 when.format("%H:%M").to_string()
                             };
 
-                        format!("{}", time)
-                    } else {
-                        "".to_string()
-                    }
+                            format!("{}", time)
+                        } else {
+                            "".to_string()
+                        }
+                    })
                 })
-            })
                 .with_spacing(10.0)
-                .padding(10.0))
-
+                .padding(10.0)))
+        .padding((0.0, 10.0, 15.0, 0.0))
         .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0)
         .lens(lens::Identity.map(
             |m: &AppModel| (m.clone(), m.records.values().map(|v| v.clone()).rev().collect()),
