@@ -666,11 +666,6 @@ fn format_duration(dur: chrono::Duration) -> String {
     }
 }
 
-fn format_duration_with_prefix(dur: chrono::Duration, prefix: &str) -> String {
-    let dur = format_duration(dur);
-    format!("{}{:12}", dur, prefix)
-}
-
 fn get_status_string(d: &AppModel) -> String {
     match d.tracking.state {
         TrackingState::Active(ref uid) => {
@@ -960,6 +955,66 @@ fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
     return column.controller(TaskDetailsController);
 }
 
+fn activity_log_widget() -> impl Widget<AppModel> {
+    Flex::row()
+        .with_child(
+            List::new(||{
+                Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
+
+                    if let Some(task) = model.tasks.get(&record.uid) {
+                        format!("{}", task.name)
+                    } else {
+                        "".to_string()
+                    }
+                })
+            })
+                .with_spacing(10.0)
+                .padding(10.0))
+
+        .with_child(
+            List::new(||{
+                Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
+
+                    if let Some(_) = model.tasks.get(&record.uid) {
+                        format_duration(record.to.signed_duration_since(*record.from))
+                    } else {
+                        "".to_string()
+                    }
+                })
+            })
+                .with_spacing(10.0)
+                .padding(10.0))
+        .with_child(
+            List::new(||{
+                Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
+
+                    if let Some(_) = model.tasks.get(&record.uid) {
+                        let now: DateTime<Local> = DateTime::from(SystemTime::now());
+                        let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
+
+                        let time =
+                            if now.year() > when.year() || now.day() > when.day() {
+                                when.format("%b %-d %H:%M").to_string()
+                            } else {
+                                when.format("%H:%M").to_string()
+                            };
+
+                        format!("{}", time)
+                    } else {
+                        "".to_string()
+                    }
+                })
+            })
+                .with_spacing(10.0)
+                .padding(10.0))
+
+        .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0)
+        .lens(lens::Identity.map(
+            |m: &AppModel| (m.clone(), m.records.values().map(|v| v.clone()).rev().collect()),
+            |_data: &mut AppModel, _m: (AppModel, Vector<TimeRecord>)| {},
+        ))
+}
+
 fn ui_builder() -> impl Widget<AppModel> {
     let mut root = Flex::column();
 
@@ -1202,40 +1257,7 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     time_column.add_flex_child(
         Scroll::new(
-            List::new(||{
-                Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
-
-                    if let Some(task) = model.tasks.get(&record.uid) {
-                        let now: DateTime<Local> = DateTime::from(SystemTime::now());
-                        let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
-                        let duration = format_duration(record.to.signed_duration_since(*record.from));
-
-                        let time =
-                            if now.year() > when.year() || now.day() > when.day() {
-                                when.format("%b %-d %H:%M").to_string()
-                            } else {
-                                when.format("%H:%M").to_string()
-                            };
-
-                        format!("{} | {} @ {}", duration, task.name, time)
-                    } else {
-                        "".to_string()
-                    }
-                })
-
-                // .background(
-                //     Painter::new(|ctx: &mut PaintCtx, item: &_, _env| {
-                //         let bounds = ctx.size().to_rect();
-                //         ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                //     }))
-            })
-                .with_spacing(10.0)
-                .padding(10.0)
-                .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0)
-                .lens(lens::Identity.map(
-                    |m: &AppModel| (m.clone(), m.records.values().map(|v| v.clone()).rev().collect()),
-                    |_data: &mut AppModel, _m: (AppModel, Vector<TimeRecord>)| {},
-                ))
+            activity_log_widget()
         ), 1.0);
 
     main_row.add_child(time_column);
