@@ -105,6 +105,7 @@ static TASK_COLOR_BG: Color                 = Color::rgb8(80, 73, 69);
 static APP_BORDER: Color                    = Color::rgb8(60, 56, 54);
 static TASK_ACTIVE_COLOR_BG: Color          = Color::rgb8(250, 189, 47);
 static TASK_REST_COLOR_BG: Color            = Color::rgb8(131, 162, 152);
+static TASK_PAUSE_COLOR_BG: Color           = Color::rgb8(211, 134, 155);
 
 static UI_TIMER_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -303,6 +304,12 @@ fn start_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
     data.tracking.state = TrackingState::Active(uid);
 }
 
+fn pause_tracking(data: &mut AppModel, uid: String)
+{
+    stop_tracking(data, TrackingState::Paused(uid));
+    data.tracking.timer_id = Rc::new(TimerToken::INVALID);
+}
+
 fn stop_tracking(data: &mut AppModel, new_state: TrackingState) {
     data.tracking.timer_id = Rc::new(TimerToken::INVALID);
 
@@ -475,6 +482,10 @@ impl TaskListWidget {
                             ctx.stroke(bounds, &TASK_ACTIVE_COLOR_BG, 4.0);
                             return;
                         },
+                        TrackingState::Paused(ref paused) if uid.eq(paused) => {
+                            ctx.stroke(bounds, &TASK_PAUSE_COLOR_BG, 4.0);
+                            return;
+                        },
                         TrackingState::Break(ref rest) if uid.eq(rest) => {
                             ctx.stroke(bounds, &TASK_REST_COLOR_BG, 4.0);
                             return;
@@ -530,9 +541,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                     TrackingState::Active(uid) => uid.clone(),
                     _ => panic!("state is not active"),
                 };
-
-                stop_tracking(&mut data.0, TrackingState::Paused(uid));
-                data.0.tracking.timer_id = Rc::new(TimerToken::INVALID);
+                pause_tracking(&mut data.0, uid);
             }
 
            Event::Command(cmd) if cmd.is(COMMAND_TASK_RESUME) => {
@@ -598,7 +607,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::MouseMove(_) => ctx.request_focus(),
 
             //TODO think of better implementation
-            Event::KeyUp(key) if key.key == druid::keyboard_types::Key::ArrowDown => {
+            Event::KeyUp(key) if key.code == druid::Code::ArrowDown => {
                 let mut next = None;
                 for x in data.0.get_uids_filtered() {
                     if x > data.0.selected_task {
@@ -612,7 +621,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 }
             },
 
-            Event::KeyUp(key) if key.key == druid::keyboard_types::Key::ArrowUp => {
+            Event::KeyUp(key) if key.code == druid::Code::ArrowUp => {
                 let mut next = None;
                 for x in data.0.get_uids_filtered() {
                     if x == data.0.selected_task {
@@ -626,6 +635,29 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 }
             },
 
+            Event::KeyUp(key) if key.code == druid::Code::Space => {
+                let selected = data.0.selected_task.clone();
+                match data.0.tracking.state.clone() {
+                    TrackingState::Inactive => start_tracking(&mut data.0, selected, ctx),
+
+                    TrackingState::Active(uid) if uid.eq(&selected) =>
+                        pause_tracking(&mut data.0, uid),
+
+                    TrackingState::Active(_) => {
+                        stop_tracking(&mut data.0, TrackingState::Inactive);
+                        start_tracking(&mut data.0, selected, ctx);
+                    },
+                    TrackingState::Paused(uid) if uid.eq(&selected) =>
+                        resume_tracking(&mut data.0, uid, ctx),
+
+                    TrackingState::Paused(_uid) => {
+                        stop_tracking(&mut data.0, TrackingState::Inactive);
+                        start_tracking(&mut data.0, selected, ctx);
+                    },
+                    TrackingState::Break(uid) => start_tracking(&mut data.0, uid, ctx),
+                }
+                println!("key = {:?}", key);
+            }
 
             _ => self.inner.event(ctx, event, data, _env),
         }
@@ -634,12 +666,10 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &(AppModel, Vector<String>), _env: &Env) {
         match event {
             LifeCycle::WidgetAdded => {
-                println!("widget added");
                 ctx.register_for_focus();
                 ctx.submit_command(COMMAND_TLIST_REQUEST_FOCUS.with(()));
                 self.inner.lifecycle(ctx, event, _data, _env)
             },
-            LifeCycle::FocusChanged(focus) => println!("focus = {}", focus),
 
             _ => self.inner.lifecycle(ctx, event, _data, _env)
         };
