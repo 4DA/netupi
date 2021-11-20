@@ -170,16 +170,23 @@ impl AppModel {
         }
     }
 
-    fn update_tags(&mut self) {
-        self.tags.clear();
+    fn get_tags(&self) -> OrdSet<String> {
+        let mut result = OrdSet::new();
 
         for (_, task) in self.tasks.iter() {
             for tag in &task.tags {
                 if task.task_status != TaskStatus::Archived {
-                    self.tags.insert(tag.clone());
+                    result.insert(tag.clone());
                 }
             }
         }
+
+        return result;
+    }
+
+    fn update_tags(&mut self) {
+        self.tags.clear();
+        self.tags = self.get_tags();
     }
 }
 
@@ -1065,17 +1072,39 @@ fn ui_builder() -> impl Widget<AppModel> {
 
                 |d: &mut AppModel, x: Option<(Task, TimePrefixSum)>| {
                     if let Some((mut new_task, _)) = x {
+
                         if let Some(prev) = d.tasks.get(&d.selected_task) {
                             if !prev.same(&new_task) {
+
                                 if let Err(what) = db::update_task(d.db.clone(), &new_task) {
                                     println!("db error: {}", what);
                                 }
 
                                 new_task.seq += 1;
 
+                                let mut deleted_filter = None;
+
+                                if let Some(ref filt) = d.tag_filter {
+                                    if !new_task.tags.contains(filt) {
+                                        deleted_filter = Some(filt.clone());
+                                    }
+                                }
+
                                 d.tasks = d.tasks.update(d.selected_task.clone(), new_task);
-                                d.check_update_selected();
                                 d.update_tags();
+
+                                // if currently select tag filter is missing
+                                // from updated task and this tag isn't
+                                // present anymore in other tags then clear
+                                // tag filter
+
+                                if let Some(ref filt) = deleted_filter {
+                                    if !d.tags.contains(filt) {
+                                        d.tag_filter = None;
+                                    }
+                                }
+
+                                d.check_update_selected();
                             }
                         }
                     }
