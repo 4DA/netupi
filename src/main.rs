@@ -642,16 +642,33 @@ struct StatusBar {
 }
 
 fn format_duration(dur: chrono::Duration) -> String {
-    if dur.num_days() > 0 {
-        format!("{:02}d:{:02}h:{:02}m:{:02}s",
-                dur.num_days(), dur.num_hours() % 24, dur.num_minutes() % 60, dur.num_seconds() % 60)
-    } else if dur.num_hours() > 0 {
-        format!("{:02}h:{:02}m:{:02}s", dur.num_hours(), dur.num_minutes() % 60, dur.num_seconds() % 60)
-    } else if dur.num_minutes() > 0 {
-        format!("{:02}m:{:02}s", dur.num_minutes() % 60, dur.num_seconds() % 60)
+    let mut empty = 0;
+    let days = if dur.num_days() > 0 {
+        format!("{}d", dur.num_days())
+    } else {empty += 1; "".to_string()};
+
+    let hours = if dur.num_hours() > 0 {
+        format!(" {}h", dur.num_hours() % 24)
+    } else {empty += 1;"".to_string()};
+
+    let mins = if dur.num_minutes() > 0 {
+        format!(" {}m", dur.num_minutes() % 60)
+    } else {empty += 1;"".to_string()};
+
+    let seconds = if dur.num_seconds() > 0 {
+        format!(" {}s", dur.num_seconds() % 60)
+    } else {empty += 1; "".to_string()};
+
+    if empty == 4 {
+        " 0s".to_string()
     } else {
-        format!("{:02}s", dur.num_seconds())
+        format!("{}{}{}{}", days, hours, mins, seconds)
     }
+}
+
+fn format_duration_with_prefix(dur: chrono::Duration, prefix: &str) -> String {
+    let dur = format_duration(dur);
+    format!("{}{:12}", dur, prefix)
 }
 
 fn get_status_string(d: &AppModel) -> String {
@@ -897,43 +914,47 @@ fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
     column.add_child(Label::new("Task time log").with_font(FONT_CAPTION_DESCR.clone()));
     column.add_default_spacer();
     column.add_child(
-        Label::new(|(_, sum): &(Task, TimePrefixSum), _env: &_| {
-            let mut result = String::new();
+        Flex::row()
+        .with_child(Label::new("Today\nWeek\nMonth\nTotal"))
+        .with_child(
+            Label::new(|(_, sum): &(Task, TimePrefixSum), _env: &_| {
+                let mut result = String::new();
 
-            let now = Local::now();
-            let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
+                let now = Local::now();
+                let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
 
-            let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
-            let total_day = get_total_time(sum, &day_start);
+                let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
+                let total_day = get_total_time(sum, &day_start);
 
-            let total = get_total_time(sum, &epoch);
+                let total = get_total_time(sum, &epoch);
 
-            result.push_str(&format!("Today: {}\n", format_duration(total_day.clone())));
+                result.push_str(&format_duration(total_day.clone()));
+                result.push_str("\n");
 
-            Utc.from_local_datetime(
-                &NaiveDate::from_isoywd(now.year(), now.iso_week().week(), Weekday::Mon)
-                .and_time(NaiveTime::from_hms(0,0,0)))
-                .single()
-                .map(|utc| result.push_str(&format!("Week: {}\n",
-                                                    format_duration(get_total_time(sum, &utc)))));
+                Utc.from_local_datetime(
+                    &NaiveDate::from_isoywd(now.year(), now.iso_week().week(), Weekday::Mon)
+                        .and_time(NaiveTime::from_hms(0,0,0)))
+                    .single()
+                    .map(|utc| result.push_str(&format_duration(get_total_time(sum, &utc))));
+                result.push_str("\n");
 
-            Utc.from_local_datetime(
-                &NaiveDate::from_ymd(now.year(), now.month(), 1)
-                .and_time(NaiveTime::from_hms(0, 0, 0)))
-                .single()
-                .map(|utc| result.push_str(&format!("Month: {}\n",
-                                                    format_duration(get_total_time(sum, &utc)))));
+                Utc.from_local_datetime(
+                    &NaiveDate::from_ymd(now.year(), now.month(), 1)
+                        .and_time(NaiveTime::from_hms(0, 0, 0)))
+                    .single()
+                    .map(|utc| result.push_str(&format_duration(get_total_time(sum, &utc))));
+                result.push_str("\n");
 
-            result.push_str(&format!("Total: {}", format_duration(total.clone())));
+                result.push_str(&format_duration(total.clone()));
 
-            return result;
-        })
-        .padding(10.0)
-        .background(
-            Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
-                let bounds = ctx.size().to_rect();
-                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                return result;
             }))
+            .padding(10.0)
+            .background(
+                Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
+                    let bounds = ctx.size().to_rect();
+                    ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                }))
     );
 
     return column.controller(TaskDetailsController);
@@ -1133,39 +1154,44 @@ fn ui_builder() -> impl Widget<AppModel> {
                           .padding(10.0));
 
     time_column.add_child(
-        Label::new(|model: &AppModel, _env: &_| {
-            let mut result = String::new();
+        Flex::row()
+        .with_child(Label::new("Today:\nWeek:\nMonth:\nAll time:"))
+        .with_child(
+            Label::new(|model: &AppModel, _env: &_| {
 
-            let now = Local::now();
-            let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
+                let mut result = String::new();
 
-            let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
-            let total_day = get_total_time_from_sums(&model.task_sums, &day_start);
+                let now = Local::now();
+                let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
 
-            let total = get_total_time_from_sums(&model.task_sums, &epoch);
+                let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
+                let total_day = get_total_time_from_sums(&model.task_sums, &day_start);
 
-            result.push_str(&format!("Today: {}\n", format_duration(total_day.clone())));
+                let total = get_total_time_from_sums(&model.task_sums, &epoch);
 
-            Utc.from_local_datetime(
-                &NaiveDate::from_isoywd(now.year(), now.iso_week().week(), Weekday::Mon)
-                .and_time(NaiveTime::from_hms(0,0,0)))
-                .single()
-                .map(|utc| result.push_str(
-                    &format!("Week: {}\n",
-                             format_duration(get_total_time_from_sums(&model.task_sums, &utc)))));
+                result.push_str(&format_duration(total_day.clone()));
+                result.push_str("\n");
 
-            Utc.from_local_datetime(
-                &NaiveDate::from_ymd(now.year(), now.month(), 1)
-                .and_time(NaiveTime::from_hms(0, 0, 0)))
-                .single()
-                .map(|utc| result.push_str(
-                    &format!("Month: {}\n",
-                             format_duration(get_total_time_from_sums(&model.task_sums, &utc)))));
+                Utc.from_local_datetime(
+                    &NaiveDate::from_isoywd(now.year(), now.iso_week().week(), Weekday::Mon)
+                        .and_time(NaiveTime::from_hms(0,0,0)))
+                    .single()
+                    .map(|utc| result.push_str(
+                        & format_duration(get_total_time_from_sums(&model.task_sums, &utc))));
+                result.push_str("\n");
 
-            result.push_str(&format!("All time: {}", format_duration(total.clone())));
+                Utc.from_local_datetime(
+                    &NaiveDate::from_ymd(now.year(), now.month(), 1)
+                        .and_time(NaiveTime::from_hms(0, 0, 0)))
+                    .single()
+                    .map(|utc| result.push_str(
+                        & format_duration(get_total_time_from_sums(&model.task_sums, &utc))));
+                result.push_str("\n");
 
-            result
-        })
+                result.push_str(&format_duration(total.clone()));
+
+                result
+        }))
         .padding(10.0)
         .lens(lens::Identity.map(
                     |m: &AppModel| m.clone(),
