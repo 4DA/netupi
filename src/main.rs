@@ -126,7 +126,8 @@ const COMMAND_TASK_RESUME:   Selector<String>  = Selector::new("tcmenu.task_resu
 const COMMAND_TASK_ARCHIVE: Selector<String>   = Selector::new("tcmenu.task_archive");
 const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_completed");
 
-const COMMAND_DETAILS_REQUEST_FOCUS: Selector  = Selector::new("details_request_focus");
+const COMMAND_TLIST_REQUEST_FOCUS: Selector  = Selector::new("tlist_request_focus");
+const COMMAND_DETAILS_REQUEST_FOCUS: Selector  = Selector::new("tdetails_request_focus");
 
 pub type BellBytes = &'static [u8; 5016];
 
@@ -576,6 +577,9 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 archive_task(&mut data.0, cmd.get(COMMAND_TASK_ARCHIVE).unwrap());
                 ctx.request_update();
             },
+            Event::Command(cmd) if cmd.is(COMMAND_TLIST_REQUEST_FOCUS) => {
+                ctx.request_focus();
+            }
             Event::Timer(id) => {
                 if *id == *data.0.tracking.timer_id {
                     play_sound(SOUND_TASK_FINISH);
@@ -589,14 +593,56 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                         _ => {},
                     };
                 }
-            }
+            },
+
+            Event::MouseMove(_) => ctx.request_focus(),
+
+            //TODO think of better implementation
+            Event::KeyUp(key) if key.key == druid::keyboard_types::Key::ArrowDown => {
+                let mut next = None;
+                for x in data.0.get_uids_filtered() {
+                    if x > data.0.selected_task {
+                        next = Some(x);
+                        break;
+                    }
+                }
+
+                if let Some(next) = next {
+                    data.0.selected_task = next;
+                }
+            },
+
+            Event::KeyUp(key) if key.key == druid::keyboard_types::Key::ArrowUp => {
+                let mut next = None;
+                for x in data.0.get_uids_filtered() {
+                    if x == data.0.selected_task {
+                        break;
+                    }
+                    next = Some(x);
+                }
+
+                if let Some(next) = next {
+                    data.0.selected_task = next;
+                }
+            },
+
 
             _ => self.inner.event(ctx, event, data, _env),
         }
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &(AppModel, Vector<String>), _env: &Env) {
-        self.inner.lifecycle(ctx, event, _data, _env)
+        match event {
+            LifeCycle::WidgetAdded => {
+                println!("widget added");
+                ctx.register_for_focus();
+                ctx.submit_command(COMMAND_TLIST_REQUEST_FOCUS.with(()));
+                self.inner.lifecycle(ctx, event, _data, _env)
+            },
+            LifeCycle::FocusChanged(focus) => println!("focus = {}", focus),
+
+            _ => self.inner.lifecycle(ctx, event, _data, _env)
+        };
     }
 
     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &(AppModel, Vector<String>), _data: &(AppModel, Vector<String>), _env: &Env) {
