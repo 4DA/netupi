@@ -135,6 +135,11 @@ pub fn get_total_time_from_sums(sums: &TaskSums, from: &DateTime::<Utc>) -> chro
 }
 
 pub fn add_record_to_sum(sum_map: &mut TimePrefixSum, record: &TimeRecord) {
+    if sum_map.is_empty() {
+        let epoch_0 = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
+        sum_map.insert(epoch_0, TimePrefix::new(&Duration::zero()));
+    }
+
     let last = match sum_map.get_max() {
         Some(ref max) => max.1.clone() + TimePrefix::new(&record.duration()),
         None => TimePrefix::new(&chrono::Duration::zero()),
