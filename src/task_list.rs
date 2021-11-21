@@ -386,6 +386,7 @@ fn start_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
     data.tracking.timestamp = Rc::new(Utc::now());
     data.tracking.elapsed = Rc::new(chrono::Duration::zero());
     data.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval(&uid).to_std().unwrap()));
+    data.tasks.get_mut(&uid).unwrap().task_status = TaskStatus::InProcess;
     data.tracking.state = TrackingState::Active(uid);
 }
 
