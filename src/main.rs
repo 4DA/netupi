@@ -270,7 +270,7 @@ pub fn main() -> anyhow::Result<()> {
     data.update_tags();
 
     let main_window = WindowDesc::new(ui_builder())
-        .window_size((1000.0, 800.0))
+        .window_size((1200.0, 800.0))
         .menu(make_menu)
         .title(LocalizedString::new("netupi-window-title").with_placeholder("netupi"));
     
@@ -358,16 +358,6 @@ fn make_menu(_: Option<WindowId>, model: &AppModel, _: &Env) -> Menu<AppModel> {
 
     let mut file = Menu::new(LocalizedString::new("File"));
 
-    file = file.entry(
-        MenuItem::new(LocalizedString::new("Import ical"))
-            .on_activate(move |_ctx, _data, _env| {})
-    );
-
-    file = file.entry(
-        MenuItem::new(LocalizedString::new("Export ical"))
-            .on_activate(move |_ctx, _data, _env| {})
-    );
-    
     file = file.entry(
         MenuItem::new(LocalizedString::new("Exit"))
             .on_activate(move |_ctx, _data, _env| {Application::global().quit();})
@@ -1113,13 +1103,10 @@ fn ui_builder() -> impl Widget<AppModel> {
     .with_weight(FontWeight::BOLD)
     .with_size(18.0);
 
-    focus_column.add_default_spacer();
-    focus_column.add_flex_child(Label::new("Focus")
-                                .with_font(FONT_CAPTION_DESCR.clone())
-                                .padding(10.0),
-                                1.0);
+    focus_column.add_child(Label::new("Focus")
+                           .with_font(FONT_CAPTION_DESCR.clone()));
 
-    focus_column.add_default_spacer();
+    focus_column.add_spacer(10.0);
 
     focus_column.add_child(
         List::new(|| {
@@ -1155,43 +1142,45 @@ fn ui_builder() -> impl Widget<AppModel> {
         ))
     );
 
-    focus_column.add_default_spacer();
+    focus_column.add_spacer(15.0);
+
     focus_column.add_child(Label::new("Tags")
-                           .with_font(FONT_CAPTION_DESCR.clone())
-                           .padding(10.0));
+                           .with_font(FONT_CAPTION_DESCR.clone()));
 
     focus_column.add_default_spacer();
 
     focus_column.add_flex_child(
-        Scroll::new(List::new(|| {
-            Container::new(
-                Label::new(|item: &(AppModel, String), _env: &_| format!("{}", item.1))
-                    .align_vertical(UnitPoint::LEFT)
-                    .padding(10.0)
-                    .background(
-                        Painter::new(|ctx: &mut PaintCtx, (shared, id): &(AppModel, String), _env| {
-                            let bounds = ctx.size().to_rect();
-                            if shared.tag_filter.is_some() &&
-                                shared.tag_filter.as_ref().unwrap().eq(id) {
-                                ctx.fill(bounds, &TASK_COLOR_BG);
-                            }
-                            else {
-                                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                            }
-                        })
-                    )
-            )
-                .on_click(|_ctx, (data, what): &mut (AppModel, String), _env| {
-                    data.tag_filter = match data.tag_filter {
-                        Some(ref filter) if filter.eq(what) => None,
-                        Some(_)                             => Some(what.clone()),
-                        None                                => Some(what.clone())
-                    };
+        Scroll::new(
+            List::new(|| {
+                Container::new(
+                    Label::new(|item: &(AppModel, String), _env: &_| format!("{}", item.1))
+                        .align_vertical(UnitPoint::LEFT)
+                        .padding(10.0)
+                        .background(
+                            Painter::new(|ctx: &mut PaintCtx, (shared, id): &(AppModel, String), _env| {
+                                let bounds = ctx.size().to_rect();
+                                if shared.tag_filter.is_some() &&
+                                    shared.tag_filter.as_ref().unwrap().eq(id) {
+                                        ctx.fill(bounds, &TASK_COLOR_BG);
+                                    }
+                                else {
+                                    ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                                }
+                            })
+                        )
+                )
+                    .on_click(|_ctx, (data, what): &mut (AppModel, String), _env| {
+                        data.tag_filter = match data.tag_filter {
+                            Some(ref filter) if filter.eq(what) => None,
+                            Some(_)                             => Some(what.clone()),
+                            None                                => Some(what.clone())
+                        };
 
-                    data.check_update_selected();
-                })
-        })
-        .with_spacing(10.0))
+                        data.check_update_selected();
+                    })
+            })
+                .with_spacing(10.0)
+                .padding((0.0, 0.0, 15.0, 0.0)))
         .vertical()
         .lens(lens::Identity.map(
             // Expose shared data with children data
@@ -1201,10 +1190,10 @@ fn ui_builder() -> impl Widget<AppModel> {
                 *d = x.0
             },
         )),
-        1.0,
+        1.0
     );
 
-    main_row.add_child(focus_column);
+    main_row.add_child(focus_column.padding(10.0));
     main_row.add_default_spacer();
 
     let tasks_scroll = Scroll::new(
