@@ -4,10 +4,12 @@ minimalistic time tracker with simple pomodoro timer
 ![screenshot](screenshot.png)
 
 # Usage
+## task list
 - up/down arrow : select task
 - spacebar : start tracking, pause, switch to other task
-- escae : stop tracking
+- escape : stop tracking
 - right mouse button : task context menu
+- "n" key : add new task
 
 # Program data
 Program settings and tasks are stored user's config directory:

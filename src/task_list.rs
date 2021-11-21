@@ -227,7 +227,11 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                     TrackingState::Active(_) => stop_tracking(&mut data.0, TrackingState::Inactive),
                     _ => data.0.tracking.state = TrackingState::Inactive,
                 }
-            }
+            },
+
+            Event::KeyUp(key) if key.code == druid::Code::KeyN => {
+                ctx.submit_command(COMMAND_TASK_NEW.with(()));
+            },
 
             _ => self.inner.event(ctx, event, data, _env),
         }
