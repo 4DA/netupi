@@ -27,6 +27,15 @@ pub const TASK_FOCUS_ALL: &str       = "All";
 
 pub const TASK_NAME_EDIT_WIDGET: WidgetId = WidgetId::reserved(9247);
 
+pub type BellBytes = &'static [u8; 5016];
+
+#[cfg(target_os = "macos")]
+pub static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
+#[cfg(target_os = "linux")]
+pub static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
+#[cfg(target_os = "windows")]
+pub const SOUND_TASK_FINISH: BellBytes = std::include_bytes!("..\\res\\bell.ogg");
+
 
 pub fn get_work_interval(_uid: &String) -> chrono::Duration {
     chrono::Duration::minutes(50)
@@ -38,14 +47,29 @@ pub fn get_rest_interval(_uid: &String) -> chrono::Duration {
     // chrono::Duration::seconds(10)
 }
 
+pub fn format_duration(dur: chrono::Duration) -> String {
+    let mut empty = 0;
+    let days = if dur.num_days() > 0 {
+        format!("{}d", dur.num_days())
+    } else {empty += 1; "".to_string()};
 
-pub type BellBytes = &'static [u8; 5016];
+    let hours = if dur.num_hours() > 0 {
+        format!(" {}h", dur.num_hours() % 24)
+    } else {empty += 1;"".to_string()};
 
-#[cfg(target_os = "macos")]
-pub static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
-#[cfg(target_os = "linux")]
-pub static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
-#[cfg(target_os = "windows")]
-pub const SOUND_TASK_FINISH: BellBytes = std::include_bytes!("..\\res\\bell.ogg");
+    let mins = if dur.num_minutes() > 0 {
+        format!(" {}m", dur.num_minutes() % 60)
+    } else {empty += 1;"".to_string()};
+
+    let seconds = if dur.num_seconds() > 0 {
+        format!(" {}s", dur.num_seconds() % 60)
+    } else {empty += 1; "".to_string()};
+
+    if empty == 4 {
+        " 0s".to_string()
+    } else {
+        format!("{}{}{}{}", days, hours, mins, seconds)
+    }
+}
 
 
