@@ -220,7 +220,13 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                     },
                     TrackingState::Break(uid) => start_tracking(&mut data.0, uid, ctx),
                 }
-                println!("key = {:?}", key);
+            }
+
+            Event::KeyUp(key) if key.code == druid::Code::Escape => {
+                match data.0.tracking.state.clone() {
+                    TrackingState::Active(_) => stop_tracking(&mut data.0, TrackingState::Inactive),
+                    _ => data.0.tracking.state = TrackingState::Inactive,
+                }
             }
 
             _ => self.inner.event(ctx, event, data, _env),
