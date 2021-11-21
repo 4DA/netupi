@@ -11,12 +11,20 @@ minimalistic time tracker with simple pomodoro timer
 
 # Program data
 Program settings and tasks are stored user's config directory:
-- Linux : `$XDG_CONFIG_HOME or $HOME/.config` (`/home/alice/.config`)
-- macOS	`$HOME/Library/Application Support`	(`/Users/Alice/Library/Application Support`)
-- Windows	`{FOLDERID_RoamingAppData}` (`C:\Users\Alice\AppData\Roaming`)
+## Linux:
+`$XDG_CONFIG_HOME/netupi or $HOME/.config`
+i.e. `/home/alice/.config`
+
+## macOS
+`$HOME/Library/Application Support/netupi`
+i.e. `/Users/Alice/Library/Application Support/netupi`
+
+## Windows
+`{FOLDERID_RoamingAppData}\netupi`
+i.e. `C:\Users\Alice\AppData\Roaming\netupi`
 
 # Configuration
-No configuration for the moment. Work/rest duration are currently
+No configuration for the moment. Work/rest durations currently
 fixed to 50m/10m, because it is what works for me.
 
 # Building
