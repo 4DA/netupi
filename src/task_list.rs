@@ -77,7 +77,7 @@ impl TaskListWidget {
             // container
             ControllerHost::new(container, ContextMenuController)
         })
-            .with_spacing(10.);
+        .with_spacing(10.);
 
         return TaskListWidget{inner: WidgetPod::new(inner)};
     }
@@ -245,13 +245,22 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &(AppModel, Vector<String>), env: &Env,
     ) -> Size {
-        let ret = self.inner.layout(ctx, bc, data, env);
-        self.inner.set_origin(ctx, &data, env, Point::ORIGIN);
-        return ret;
+        let ret = self.inner.layout(ctx, &bc.shrink(Size::new(20.0, 20.0)), data, env);
+        self.inner.set_origin(ctx, &data, env, Point::new(10.0, 10.0));
+
+        if ret.is_empty() {
+            ret
+        } else {
+            ret + Size::new(20.0, 20.0)
+        }
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &(AppModel, Vector<String>), env: &Env) {
-        self.inner.paint(ctx, data, env)
+        self.inner.paint(ctx, data, env);
+        let bounds = ctx.size().to_rect();
+        if ctx.is_focused() {
+            ctx.stroke(bounds, &TASK_FOCUS_BORDER, 2.0);
+        }
     }
 }
 

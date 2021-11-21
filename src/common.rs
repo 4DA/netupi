@@ -7,6 +7,7 @@ pub static APP_BORDER: Color                    = Color::rgb8(60, 56, 54);
 pub static TASK_ACTIVE_COLOR_BG: Color          = Color::rgb8(250, 189, 47);
 pub static TASK_REST_COLOR_BG: Color            = Color::rgb8(131, 162, 152);
 pub static TASK_PAUSE_COLOR_BG: Color           = Color::rgb8(211, 134, 155);
+pub static TASK_FOCUS_BORDER: Color             = Color::rgb8(124, 111, 100);
 pub static UI_TIMER_INTERVAL: Duration = Duration::from_secs(1);
 
 pub const COMMAND_TASK_NEW:    Selector            = Selector::new("tcmenu.task_new");
