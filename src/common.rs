@@ -62,7 +62,7 @@ pub fn format_duration(dur: chrono::Duration) -> String {
         format!(" {}m", dur.num_minutes() % 60)
     } else {empty += 1;"".to_string()};
 
-    let seconds = if dur.num_seconds() > 0 {
+    let seconds = if dur.num_seconds() > 0 && dur.num_seconds() % 60 != 0 {
         format!(" {}s", dur.num_seconds() % 60)
     } else {empty += 1; "".to_string()};
 
