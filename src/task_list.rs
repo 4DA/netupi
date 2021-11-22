@@ -6,7 +6,7 @@ use std::time::SystemTime;
 use druid::im::{Vector, OrdSet};
 use druid::widget::prelude::*;
 
-use druid::widget::{Label, List, Controller, ControllerHost, Container, Painter};
+use druid::widget::{Label, List, Controller, ControllerHost, Container, Painter, Scroll};
 
 use druid::{PaintCtx, RenderContext, Env, Event, EventCtx, Point,
             Menu, MenuItem, TimerToken, LocalizedString, UnitPoint, Widget, WidgetPod, WidgetExt,};
@@ -26,13 +26,14 @@ use crate::common::*;
 use crate::db;
 
 pub struct TaskListWidget {
-    inner: WidgetPod<(AppModel, Vector<String>), List<(AppModel, String)>>
+    inner: WidgetPod<(AppModel, Vector<String>),
+                  Scroll<(AppModel, Vector<String>), List<(AppModel, String)>>>
 }
 
 impl TaskListWidget {
     pub fn new() -> TaskListWidget {
 
-        let inner = List::new(|| {
+        let inner = Scroll::new(List::new(|| {
 
             let task_painter =
                 Painter::new(|ctx: &mut PaintCtx, (shared, uid): &(AppModel, String), _env| {
@@ -77,7 +78,7 @@ impl TaskListWidget {
             // container
             ControllerHost::new(container, ContextMenuController)
         })
-        .with_spacing(10.);
+        .with_spacing(10.)).vertical();
 
         return TaskListWidget{inner: WidgetPod::new(inner)};
     }

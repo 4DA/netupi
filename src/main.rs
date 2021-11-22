@@ -457,10 +457,7 @@ fn ui_builder() -> impl Widget<AppModel> {
     main_row.add_child(focus_column.padding(10.0));
     main_row.add_default_spacer();
 
-    let tasks_scroll = Scroll::new(
-            TaskListWidget::new()
-        )
-        .vertical()
+    let task_list_widget = TaskListWidget::new()
         .lens(lens::Identity.map(
             // Expose shared data with children data
             |d: &AppModel| (d.clone(), d.get_uids_filtered().collect()),
@@ -471,7 +468,7 @@ fn ui_builder() -> impl Widget<AppModel> {
         ));
 
     // Build a list with shared data
-    tasks_column.add_flex_child(tasks_scroll, 2.0);
+    tasks_column.add_flex_child(task_list_widget, 2.0);
 
     tasks_column.add_spacer(10.0);
 
