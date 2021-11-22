@@ -28,6 +28,7 @@ use druid::{Color, Data, FontDescriptor, HotKey, KbKey, KeyOrValue, Selector, Te
 const CANCEL_EDITING: Selector = Selector::new("druid.builtin.EditableLabel-cancel-editing");
 const COMPLETE_EDITING: Selector = Selector::new("druid.builtin.EditableLabel-complete-editing");
 pub const BEGIN_EDITING: Selector = Selector::new("druid.builtin.EditableLabel-begin-editing");
+pub const FOCUS_RESIGNED: Selector = Selector::new("druid.builtin.EditableLabel-focus-resigned");
 
 /// A label with text that can be edited.
 ///
@@ -122,6 +123,7 @@ impl<T: Data> EditableLabel<T> {
             ctx.request_layout();
             if ctx.has_focus() {
                 ctx.resign_focus();
+                ctx.submit_notification(FOCUS_RESIGNED.with(()));
             }
         } else {
             // don't tab away from here if we're editing
@@ -136,6 +138,7 @@ impl<T: Data> EditableLabel<T> {
         self.editing = false;
         ctx.request_layout();
         ctx.resign_focus();
+        ctx.submit_notification(FOCUS_RESIGNED.with(()));
     }
 
     fn begin(&mut self, ctx: &mut EventCtx) {

@@ -208,6 +208,10 @@ impl<T, W: Widget<T>> Controller<T, W> for TaskDetailsController {
 
             },
 
+            Event::Notification(cmd) if cmd.is(editable_label::FOCUS_RESIGNED) => {
+                ctx.set_handled();
+                ctx.submit_command(COMMAND_TLIST_REQUEST_FOCUS.with(()));
+            }
             _ => child.event(ctx, event, data, env),
         }
     }
