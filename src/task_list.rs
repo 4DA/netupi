@@ -134,6 +134,10 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 let mut task = data.0.tasks.get(&uid).expect("unknown uid").clone();
                 task.task_status = TaskStatus::Completed;
 
+                if let Err(what) = db::update_task(data.0.db.clone(), &task) {
+                    println!("db error: {}", what);
+                }
+
                 match &data.0.tracking.state {
                     TrackingState::Active(cur) if cur.eq(&uid)
                         => stop_tracking(&mut data.0, TrackingState::Inactive),
@@ -352,14 +356,18 @@ pub fn make_task_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
     let uid_archive = current.clone();
     let uid_completed = current.clone();
 
+    let completed_entry = MenuItem::new(LocalizedString::new("Mark completed"))
+        .on_activate(
+            move |ctx, _: &mut AppModel, _env| {
+                ctx.submit_command(COMMAND_TASK_COMPLETED.with(uid_completed.clone()));
+            });
+
+    result = match &d.tasks.get(current).unwrap().task_status {
+        TaskStatus::NeedsAction | TaskStatus::InProcess => result.entry(completed_entry),
+        _ => result,
+    };
+
     result
-        .entry(
-            MenuItem::new(LocalizedString::new("Mark completed"))
-                .on_activate(
-                    move |ctx, _: &mut AppModel, _env| {
-                    ctx.submit_command(COMMAND_TASK_COMPLETED.with(uid_completed.clone()));
-                }),
-        )
         .entry(
             new_task_entry,
         )
