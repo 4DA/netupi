@@ -393,8 +393,8 @@ fn start_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
     data.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval(&uid).to_std().unwrap()));
     data.tasks.get_mut(&uid).unwrap().task_status = TaskStatus::InProcess;
 
-    if data.focus_filter.eq(TASK_FOCUS_COMPLETED) {
-        data.focus_filter = TASK_FOCUS_CURRENT.to_string();
+    if data.focus_filter == FocusFilter::Completed {
+        data.focus_filter = FocusFilter::Current;
     }
 
     data.tracking.state = TrackingState::Active(uid);

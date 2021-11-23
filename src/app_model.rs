@@ -1,4 +1,4 @@
-use druid::im::{Vector, OrdSet};
+use druid::im::{OrdSet};
 use druid::{Data, TimerToken, Lens,};
 
 use chrono::prelude::*;
@@ -12,6 +12,23 @@ pub enum TrackingState {
     Active(String),
     Paused(String),
     Break(String)
+}
+
+#[derive(Debug, Clone, PartialEq, Data)]
+pub enum FocusFilter {
+    Current,
+    Completed,
+    All
+}
+
+impl FocusFilter {
+    pub fn as_str(&self) -> &str {
+        match &self {
+            FocusFilter::Current => "Current",
+            FocusFilter::Completed => "Completed",
+            FocusFilter::All => "All",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Data)]
@@ -29,9 +46,8 @@ pub struct AppModel {
     pub records: TimeRecordMap,
     pub task_sums: TaskSums,
     pub tags: OrdSet<String>,
-    pub focus: Vector<String>,
     pub tracking: TrackingCtx,
     pub selected_task: String,
-    pub focus_filter: String,
+    pub focus_filter: FocusFilter,
     pub tag_filter: Option<String>,
 }

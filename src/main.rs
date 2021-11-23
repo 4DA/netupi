@@ -59,7 +59,7 @@ impl AppModel {
                               task.task_status == TaskStatus::InProcess},
                 TASK_FOCUS_COMPLETED => task.task_status == TaskStatus::Completed,
                 TASK_FOCUS_ALL => task.task_status != TaskStatus::Archived,
-                _ => panic!("Unknown focus filter {}", &self.focus_filter),
+                _ => panic!("Unknown focus filter {}", &self.focus_filter.as_str()),
             };
 
             let tag_ok =
@@ -109,10 +109,6 @@ pub fn main() -> anyhow::Result<()> {
     let conn = db::init()?;
     let db = Rc::new(conn);
 
-    let focus = vector![TASK_FOCUS_CURRENT.to_string(),
-                        TASK_FOCUS_COMPLETED.to_string(),
-                        TASK_FOCUS_ALL.to_string()];
-
     let (tasks, tags) = db::get_tasks(db.clone())?;
     let records = db::get_time_records(db.clone(),
         &DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
@@ -133,13 +129,12 @@ pub fn main() -> anyhow::Result<()> {
         records,
         task_sums,
         tags,
-        focus,
         tracking: TrackingCtx{state: TrackingState::Inactive,
                               timestamp: Rc::new(Utc::now()),
                               timer_id: Rc::new(TimerToken::INVALID),
                               elapsed: Rc::new(chrono::Duration::zero())},
         selected_task: selected_task,
-        focus_filter: TASK_FOCUS_CURRENT.to_string(),
+        focus_filter: FocusFilter::Current,
         tag_filter: None
     };
 
@@ -372,13 +367,13 @@ fn ui_builder() -> impl Widget<AppModel> {
     focus_column.add_child(
         List::new(|| {
             Container::new(
-                Label::new(|item: &(AppModel, String), _env: &_| format!("{}", item.1))
+                Label::new(|item: &(AppModel, FocusFilter), _env: &_| format!("{}", item.1.as_str()))
                     .align_vertical(UnitPoint::LEFT)
                     .padding(10.0)
                     .background(
-                        Painter::new(|ctx: &mut PaintCtx, (shared, id): &(AppModel, String), _env| {
+                        Painter::new(|ctx: &mut PaintCtx, (shared, filter): &(AppModel, FocusFilter), _env| {
                             let bounds = ctx.size().to_rect();
-                            if shared.focus_filter.eq(id) {
+                            if shared.focus_filter.eq(filter) {
                                 ctx.fill(bounds, &TASK_COLOR_BG);
                             }
                             else {
@@ -387,7 +382,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                         })
                     )
             )
-            .on_click(|_ctx, (model, what): &mut (AppModel, String), _env| {
+            .on_click(|_ctx, (model, what): &mut (AppModel, FocusFilter), _env| {
                 model.focus_filter = what.clone();
                 model.check_update_selected();
             })
@@ -395,8 +390,8 @@ fn ui_builder() -> impl Widget<AppModel> {
         .with_spacing(10.0)
         .lens(lens::Identity.map(
             // Expose shared data with children data
-            |d: &AppModel| (d.clone(), d.focus.clone()),
-            |d: &mut AppModel, x: (AppModel, Vector<String>)| {
+            |d: &AppModel| (d.clone(), vector![FocusFilter::Current, FocusFilter::Completed, FocusFilter::All]),
+            |d: &mut AppModel, x: (AppModel, Vector<FocusFilter>)| {
                 // If shared data was changed reflect the changes in our AppModel
                 *d = x.0
             },
