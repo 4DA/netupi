@@ -11,6 +11,8 @@ use rusqlite::{
     Connection, ToSql
 };
 
+use chrono::Duration;
+
 use dirs;
 
 use anyhow;
@@ -18,6 +20,20 @@ use anyhow;
 use chrono::{DateTime, Utc, TimeZone};
 
 use crate::task::*;
+
+struct DurationWrapper(chrono::Duration);
+
+impl ToSql for DurationWrapper {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(self.0.num_milliseconds()))
+    }
+}
+
+impl FromSql for DurationWrapper {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        Ok(DurationWrapper(Duration::milliseconds(value.as_i64()?)))
+    }
+}
 
 struct TimeWrapper(DateTime<Utc>);
 
@@ -42,7 +58,7 @@ pub fn init() -> anyhow::Result<Connection>{
     let dir = path_buf.to_str().unwrap();
     fs::create_dir_all(dir)?;
 
-    path_buf.push("time_tracker.db");
+    path_buf.push("netupi.db");
 
     let file_path = path_buf.to_str().unwrap();
 
@@ -51,12 +67,15 @@ pub fn init() -> anyhow::Result<Connection>{
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tasks (
              uid text primary key,
+             seq integer not null,
              name text not null,
-             description text,
-             tags text,
-             priority integer,
-             status text,
-             seq integer
+             description text not null,
+             tags text not null,
+             priority integer not null,
+             status text not null,
+             work_duration integer not null,
+             break_duration integer not null,
+             color integer not null
          )",
         [],
     )?;
@@ -74,11 +93,15 @@ pub fn init() -> anyhow::Result<Connection>{
 
 pub fn add_task(conn: Rc<Connection>, task: &Task) -> anyhow::Result<()> {
     conn.execute(
-        "INSERT INTO tasks (uid, name, description, tags, priority, status, seq) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        &[&task.uid, &task.name, &task.description,
-          &serde_json::to_string(&Wrapper::new(&task.tags)).unwrap(),
-          &task.priority.to_string(), &serde_json::to_string(&task.task_status).unwrap(),
-          &task.seq.to_string()],
+        "INSERT INTO tasks (uid, name, description, tags, priority, status, work_duration, break_duration, color, seq) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![&task.uid, &task.name, &task.description,
+                &serde_json::to_string(&Wrapper::new(&task.tags)).unwrap(),
+                &task.priority.to_string(), &serde_json::to_string(&task.task_status).unwrap(),
+                &DurationWrapper(*task.work_duration),
+                &DurationWrapper(*task.break_duration),
+                task.color,
+                &task.seq.to_string(),
+        ],
     )?;
 
     println!("insert ok | t: {:?}", &task);
@@ -88,11 +111,12 @@ pub fn add_task(conn: Rc<Connection>, task: &Task) -> anyhow::Result<()> {
 
 pub fn update_task(conn: Rc<Connection>, task: &Task) -> anyhow::Result<()> {
     conn.execute(
-        "UPDATE tasks SET name = ?1, description = ?2, tags = ?3, priority = ?4, status = ?5, seq = ?6 WHERE uid = ?7;",
-        &[&task.name, &task.description,
-          &serde_json::to_string(&Wrapper::new(&task.tags)).unwrap(),
-          &task.priority.to_string(), &serde_json::to_string(&task.task_status).unwrap(),
-          &task.seq.to_string(), &task.uid],
+        "UPDATE tasks SET name = ?1, description = ?2, tags = ?3, priority = ?4, status = ?5, work_duration = ?6, break_duration = ?7, seq = ?8, color = ?9 WHERE uid = ?10;",
+        params![&task.name, &task.description,
+                &serde_json::to_string(&Wrapper::new(&task.tags)).unwrap(),
+                &task.priority.to_string(), &serde_json::to_string(&task.task_status).unwrap(),
+                &DurationWrapper(*task.work_duration), &DurationWrapper(*task.break_duration),
+                &task.seq.to_string(), task.color, &task.uid],
     )?;
 
     println!("update ok | t: {:?}", &task);
@@ -119,9 +143,11 @@ pub fn get_tasks(conn: Rc<Connection>) -> anyhow::Result<(TaskMap, TagSet)>
     )?;
 
     let sqtasks = stmt.query_map([], |row| {
-        let stat_str: String = row.get(5)?;
-        let tag_str: String = row.get(3)?;
+        let tag_str: String = row.get(4)?;
         let arr = serde_json::from_str::<Vec<String>>(&tag_str).unwrap();
+        let stat_str: String = row.get(6)?;
+        let work_duration: DurationWrapper = row.get(7)?;
+        let rest_duration: DurationWrapper = row.get(8)?;
         let mut tag_set = OrdSet::new();
 
         for x in arr {
@@ -129,13 +155,16 @@ pub fn get_tasks(conn: Rc<Connection>) -> anyhow::Result<(TaskMap, TagSet)>
         }
 
         Ok(Task {
-            name         : row.get(1)?,
-            description  : row.get(2)?,
-            uid          : row.get(0)?,
-            tags         : tag_set,
-            priority     : row.get::<usize, u32>(4)?,
-            task_status  : serde_json::from_str::<TaskStatus>(&stat_str).unwrap(),
-            seq          : row.get::<usize, u32>(6)?
+            uid            : row.get(0)?,
+            seq            : row.get::<usize, u32>(1)?,
+            name           : row.get(2)?,
+            description    : row.get(3)?,
+            tags           : tag_set,
+            priority       : row.get::<usize, u32>(5)?,
+            task_status    : serde_json::from_str::<TaskStatus>(&stat_str).unwrap(),
+            work_duration  : Rc::new(work_duration.0),
+            break_duration : Rc::new(rest_duration.0),
+            color          : row.get::<usize, u32>(9)?,
         })
     })?;
 

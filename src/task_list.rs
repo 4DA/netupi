@@ -116,7 +116,9 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
                 let uid = generate_uid();
                 let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), OrdSet::new(),
-                                     0, TaskStatus::NeedsAction, 0);
+                                     0, TaskStatus::NeedsAction,
+                                     chrono::Duration::minutes(50),
+                                     chrono::Duration::minutes(10), 0);
 
                 if let Err(what) = db::add_task(data.0.db.clone(), &task) {
                     println!("db error: {}", what);

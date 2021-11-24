@@ -38,13 +38,16 @@ impl TaskStatus {
 
 #[derive(Debug, Clone, Data, Lens)]
 pub struct Task {
+    pub uid: String,
+    pub seq: u32,
     pub name: String,
     pub description: String,
-    pub uid: String,
     pub tags: TagSet,
     pub priority: u32,
     pub task_status: TaskStatus,
-    pub seq: u32,
+    pub work_duration: Rc<Duration>,
+    pub break_duration: Rc<Duration>,
+    pub color: u32,
 }
 
 #[derive(Debug, Clone, Data)]
@@ -62,9 +65,16 @@ impl TimeRecord {
 
 impl Task {
     pub fn new(name: String, description: String,
-           uid: String, tags: OrdSet<String>,
-           priority: u32, task_status: TaskStatus, seq: u32) -> Task {
-        return Task{name, description, uid, tags, priority, task_status, seq};
+               uid: String, tags: OrdSet<String>,
+               priority: u32, task_status: TaskStatus,
+               work_duration: chrono::Duration,
+               break_duration: chrono::Duration,
+               seq: u32) -> Task
+    {
+        return Task{name, description, uid, tags, priority, task_status,
+                    work_duration: Rc::new(work_duration),
+                    break_duration: Rc::new(break_duration),
+                    seq, color: 0};
     }
 }
 
