@@ -238,6 +238,14 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 ctx.submit_command(COMMAND_TASK_NEW.with(()));
             },
 
+            Event::KeyUp(key) if key.code == druid::Code::Tab => {
+                ctx.focus_next();
+            },
+
+            Event::KeyUp(key) => {
+                println!("unknown key: {:?}", key);
+            },
+
             _ => self.inner.event(ctx, event, data, _env),
         }
     }
