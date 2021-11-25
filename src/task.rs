@@ -1,11 +1,17 @@
 use std::ops::Add;
 use std::rc::Rc;
+use std::time::SystemTime;
+
 use druid::{Data, Lens};
 use chrono::prelude::*;
 use chrono::Duration;
 use druid::im::{OrdSet, OrdMap};
 use serde::{Serialize, Serializer, Deserialize};
 use serde::ser::{SerializeSeq};
+
+// uid stuff
+use uuid::v1::{Timestamp, Context};
+use uuid::Uuid;
 
 pub type TagSet        = OrdSet<String>;
 pub type TaskMap       = OrdMap<String, Task>;
@@ -76,6 +82,13 @@ impl Task {
                     break_duration: Rc::new(break_duration),
                     seq, color: 0};
     }
+
+    pub fn new_simple(name: String) -> Task {
+        Task::new(name, "".to_string(), generate_uid(), OrdSet::new(),
+                  0, TaskStatus::NeedsAction,
+                  chrono::Duration::minutes(50),
+                  chrono::Duration::minutes(10), 0)
+    }
 }
 
 #[derive(Debug, Clone, Data, PartialEq)]
@@ -122,6 +135,15 @@ where
     }
 }
 
+pub fn generate_uid() -> String {
+    let context = Context::new(42);
+    let epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+    let ts = Timestamp::from_unix(&context, epoch.as_secs(), epoch.subsec_nanos());
+    let uuid = Uuid::new_v1(ts, &[1, 2, 3, 4, 5, 6]).expect("failed to generate UUID");
+    return uuid.to_string();
+}
+
+
 pub fn get_total_time(prefix_sum: &TimePrefixSum, from: &DateTime::<Utc>)
                       -> chrono::Duration
 {
@@ -145,6 +167,8 @@ pub fn get_total_time_from_sums(sums: &TaskSums, from: &DateTime::<Utc>) -> chro
 }
 
 pub fn add_record_to_sum(sum_map: &mut TimePrefixSum, record: &TimeRecord) {
+    // handle case when  record is older than newest entry in sum_map
+
     if sum_map.is_empty() {
         let epoch_0 = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
         sum_map.insert(epoch_0, TimePrefix::new(&Duration::zero()));

@@ -2,7 +2,6 @@
 #![windows_subsystem = "windows"]
 
 use std::rc::Rc;
-use std::any::type_name;
 use std::time::SystemTime;
 use std::env;
 
@@ -42,12 +41,8 @@ use task_details::*;
 mod common;
 use common::*;
 
-
-#[allow(unused)]
-fn type_of<T>(_: T) -> &'static str {
-    type_name::<T>()
-}
-
+mod utils;
+use utils::*;
 
 impl AppModel {
     fn get_uids_filtered(&self) -> impl Iterator<Item = String> + '_ {

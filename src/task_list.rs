@@ -1,9 +1,8 @@
 use std::rc::Rc;
 use std::thread;
 use std::io::BufReader;
-use std::time::SystemTime;
 
-use druid::im::{Vector, OrdSet};
+use druid::im::{Vector};
 use druid::widget::prelude::*;
 
 use druid::widget::{Label, List, Controller, ControllerHost, Container, Painter, Scroll};
@@ -15,10 +14,6 @@ use druid::{PaintCtx, RenderContext, Env, Event, EventCtx, Point,
 use chrono::prelude::*;
 
 use rodio::{Decoder, OutputStream, Sink};
-
-// uid stuff
-use uuid::v1::{Timestamp, Context};
-use uuid::Uuid;
 
 use crate::task::*;
 use crate::app_model::*;
@@ -114,11 +109,8 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             }
 
             Event::Command(cmd) if cmd.is(COMMAND_TASK_NEW) => {
-                let uid = generate_uid();
-                let task = Task::new("new task".to_string(), "".to_string(), uid.clone(), OrdSet::new(),
-                                     0, TaskStatus::NeedsAction,
-                                     chrono::Duration::minutes(50),
-                                     chrono::Duration::minutes(10), 0);
+                let task = Task::new_simple("new task".to_string());
+                let uid = task.uid.clone();
 
                 if let Err(what) = db::add_task(data.0.db.clone(), &task) {
                     println!("db error: {}", what);
@@ -464,14 +456,6 @@ fn archive_task(model: &mut AppModel, uid: &String) {
     }
     model.update_tags();
     model.check_update_selected();
-}
-
-fn generate_uid() -> String {
-    let context = Context::new(42);
-    let epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
-    let ts = Timestamp::from_unix(&context, epoch.as_secs(), epoch.subsec_nanos());
-    let uuid = Uuid::new_v1(ts, &[1, 2, 3, 4, 5, 6]).expect("failed to generate UUID");
-    return uuid.to_string();
 }
 
 pub fn play_sound(bytes: &'static [u8]) {
