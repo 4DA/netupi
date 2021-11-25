@@ -244,9 +244,9 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 ctx.focus_next();
             },
 
-            Event::KeyUp(key) => {
-                println!("unknown key: {:?}", key);
-            },
+            // Event::KeyUp(key) => {
+            //     println!("unknown key: {:?}", key);
+            // },
 
             _ => self.inner.event(ctx, event, data, _env),
         }
@@ -393,14 +393,14 @@ pub fn make_task_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
 fn start_rest(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
     data.tracking.timestamp = Rc::new(Utc::now());
     data.tracking.timer_id =
-        Rc::new(ctx.request_timer(get_rest_interval(&uid).to_std().unwrap()));
+        Rc::new(ctx.request_timer(get_rest_interval(data, &uid).to_std().unwrap()));
     data.tracking.state = TrackingState::Break(uid);
 }
 
 fn resume_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
     data.tracking.timestamp = Rc::new(Utc::now());
     data.tracking.timer_id =
-        Rc::new(ctx.request_timer(get_work_interval(&uid).checked_sub(&data.tracking.elapsed)
+        Rc::new(ctx.request_timer(get_work_interval(data, &uid).checked_sub(&data.tracking.elapsed)
                                   .unwrap_or(chrono::Duration::zero()).to_std().unwrap()));
     data.tracking.state = TrackingState::Active(uid);
 }
@@ -408,7 +408,7 @@ fn resume_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
 fn start_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
     data.tracking.timestamp = Rc::new(Utc::now());
     data.tracking.elapsed = Rc::new(chrono::Duration::zero());
-    data.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval(&uid).to_std().unwrap()));
+    data.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval(data, &uid).to_std().unwrap()));
     data.tasks.get_mut(&uid).unwrap().task_status = TaskStatus::InProcess;
 
     if data.focus_filter == FocusFilter::Completed {

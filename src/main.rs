@@ -195,7 +195,7 @@ fn get_status_string(d: &AppModel) -> String {
                 .signed_duration_since(d.tracking.timestamp.as_ref().clone()))
                 .unwrap_or(chrono::Duration::zero());
 
-            let total = get_work_interval(uid);
+            let total = get_work_interval(d, uid);
 
             format!("Active: '{}' | Elapsed: {} / {}",
                     active_task.name, format_duration(duration), format_duration(total))
@@ -206,7 +206,7 @@ fn get_status_string(d: &AppModel) -> String {
             let duration =
                 Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
 
-            let total = get_rest_interval(uid);
+            let total = get_rest_interval(d, uid);
 
             format!("Break: '{}' | Elapsed: {} / {}",
                     rest_task.name, format_duration(duration), format_duration(total))
@@ -217,7 +217,7 @@ fn get_status_string(d: &AppModel) -> String {
             format!("Paused: '{}' | Elapsed: {} / {}",
                     active_task.name,
                     format_duration(*(&d.tracking.elapsed).clone()),
-                    format_duration(get_work_interval(uid)))
+                    format_duration(get_work_interval(d, uid)))
         },
 
         _ => format!("")

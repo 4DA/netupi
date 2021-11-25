@@ -1,3 +1,6 @@
+use std::rc::Rc;
+use chrono::Duration;
+
 use druid::im::{Vector, OrdSet};
 use druid::lens::{self, LensExt};
 use druid::widget::{CrossAxisAlignment, Flex, Label, List, Scroll, Controller, Painter, Radio};
@@ -5,7 +8,7 @@ use druid::widget::{CrossAxisAlignment, Flex, Label, List, Scroll, Controller, P
 use druid::{
     Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     FontWeight, FontDescriptor, FontFamily,
-    UnitPoint, Widget, WidgetExt, Target, Command};
+    UnitPoint, Widget, WidgetExt, Target, TextAlignment, Command};
 
 use crate::editable_label;
 use crate::editable_label::EditableLabel;
@@ -178,6 +181,40 @@ fn task_edit_widget() -> impl Widget<Task> {
                     d.description = x;
                 },
             )));
+
+    column.add_spacer(15.0);
+
+    column.add_child(
+        Flex::row()
+            .with_child(Label::new("Work/rest duration").with_font(FONT_CAPTION_DESCR.clone()))
+            .with_default_spacer()
+            .with_child(
+                EditableLabel::parse()
+                    .with_text_alignment(TextAlignment::End)
+                    .lens(lens::Identity.map(
+                        |d: &Task| d.work_duration.num_minutes(),
+                        |d: &mut Task, x: i64| {
+                            if *d.work_duration != Duration::minutes(x){
+                                d.work_duration = Rc::new(Duration::minutes(x));
+                            }
+                        },
+                    )).fix_width(40.0))
+            .with_default_spacer()
+            .with_child(
+                EditableLabel::parse()
+                    .with_text_alignment(TextAlignment::End)
+                    .lens(lens::Identity.map(
+                        |d: &Task| d.break_duration.num_minutes(),
+                        |d: &mut Task, x: i64| {
+                            if *d.break_duration != Duration::minutes(x){
+                                d.break_duration = Rc::new(Duration::minutes(x));
+                            }
+                        },
+                    )).fix_width(40.0))
+            .with_default_spacer()
+            .with_child(Label::new("min").with_font(FONT_CAPTION_DESCR.clone()))
+    );
+
 
     // DropdownSelect from widget nursery creates separated window
     // column.add_flex_child(

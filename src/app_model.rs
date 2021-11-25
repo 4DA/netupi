@@ -51,3 +51,14 @@ pub struct AppModel {
     pub focus_filter: FocusFilter,
     pub tag_filter: Option<String>,
 }
+
+pub fn get_work_interval(model: &AppModel, uid: &String) -> chrono::Duration {
+    *model.tasks.get(uid).unwrap().work_duration.clone()
+    // chrono::Duration::seconds(10)
+}
+
+pub fn get_rest_interval(model: &AppModel, uid: &String) -> chrono::Duration {
+    *model.tasks.get(uid).unwrap().break_duration.clone()
+    // chrono::Duration::seconds(10)
+}
+

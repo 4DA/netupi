@@ -26,8 +26,7 @@ i.e. `/Users/Alice/Library/Application Support/netupi`
 i.e. `C:\Users\Alice\AppData\Roaming\netupi`
 
 # Configuration
-No configuration for the moment. Work/rest durations currently
-fixed to 50m/10m, because it is what works for me.
+- TBD
 
 # Building
 1. install [rust](https://www.rust-lang.org/tools/install)

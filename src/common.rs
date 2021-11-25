@@ -37,17 +37,6 @@ pub static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg")
 #[cfg(target_os = "windows")]
 pub const SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
 
-
-pub fn get_work_interval(_uid: &String) -> chrono::Duration {
-    chrono::Duration::minutes(50)
-    // chrono::Duration::seconds(10)
-}
-
-pub fn get_rest_interval(_uid: &String) -> chrono::Duration {
-    chrono::Duration::minutes(10)
-    // chrono::Duration::seconds(10)
-}
-
 pub fn format_duration(dur: chrono::Duration) -> String {
     let mut empty = 0;
     let days = if dur.num_days() > 0 {
