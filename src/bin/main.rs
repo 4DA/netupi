@@ -7,7 +7,7 @@ use std::env;
 
 
 use druid::widget::prelude::*;
-use druid::im::{vector, Vector, OrdSet};
+use druid::im::{vector, Vector};
 use druid::lens::{self, LensExt};
 use druid::widget::{CrossAxisAlignment, Flex, Label, SizedBox, List, Scroll, Container, Painter};
 
@@ -19,83 +19,25 @@ use druid::{
 
 use chrono::prelude::*;
 
-mod editable_label;
+use netupi::maybe::Maybe;
 
-mod maybe;
-use crate::maybe::Maybe;
+use netupi::task::*;
+use netupi::db;
 
-mod task;
-use task::*;
 
-mod db;
+use netupi::app_model::*;
 
-mod app_model;
-use app_model::*;
 
-mod task_list;
-use task_list::*;
+use netupi::task_list::*;
 
-mod task_details;
-use task_details::*;
 
-mod common;
-use common::*;
+use netupi::task_details::*;
 
-mod utils;
-use utils::*;
 
-impl AppModel {
-    fn get_uids_filtered(&self) -> impl Iterator<Item = String> + '_ {
-        self.tasks.keys().cloned().filter(move |uid| {
-            let task = self.tasks.get(uid).expect("unknown uid");
+use netupi::common::*;
 
-            let focus_ok = match self.focus_filter.as_str() {
-                TASK_FOCUS_CURRENT => {task.task_status == TaskStatus::NeedsAction ||
-                              task.task_status == TaskStatus::InProcess},
-                TASK_FOCUS_COMPLETED => task.task_status == TaskStatus::Completed,
-                TASK_FOCUS_ALL => task.task_status != TaskStatus::Archived,
-                _ => panic!("Unknown focus filter {}", &self.focus_filter.as_str()),
-            };
 
-            let tag_ok =
-                if let Some(ref tag_filter) = self.tag_filter {
-                    task.tags.contains(tag_filter)
-                } else {
-                    true
-                };
-
-            return focus_ok && tag_ok;
-        })
-    }
-
-    fn check_update_selected(&mut self) {
-        let filtered: Vector<String> = self.get_uids_filtered().collect();
-
-        // select any task if currently selected is filtered out
-        if !filtered.contains(&self.selected_task) {
-            self.selected_task = filtered.front().unwrap_or(&"".to_string()).clone();
-        }
-    }
-
-    fn get_tags(&self) -> OrdSet<String> {
-        let mut result = OrdSet::new();
-
-        for (_, task) in self.tasks.iter() {
-            for tag in &task.tags {
-                if task.task_status != TaskStatus::Archived {
-                    result.insert(tag.clone());
-                }
-            }
-        }
-
-        return result;
-    }
-
-    fn update_tags(&mut self) {
-        self.tags.clear();
-        self.tags = self.get_tags();
-    }
-}
+use netupi::utils::*;
 
 
 pub fn main() -> anyhow::Result<()> {
