@@ -20,24 +20,12 @@ use druid::{
 use chrono::prelude::*;
 
 use netupi::maybe::Maybe;
-
 use netupi::task::*;
 use netupi::db;
-
-
 use netupi::app_model::*;
-
-
 use netupi::task_list::*;
-
-
 use netupi::task_details::*;
-
-
 use netupi::common::*;
-
-
-use netupi::utils::*;
 
 
 pub fn main() -> anyhow::Result<()> {
