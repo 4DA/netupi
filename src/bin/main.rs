@@ -225,70 +225,27 @@ struct ActivityLogWidget {
 fn paint_log_entry(ctx: &mut PaintCtx, ((shared, hot), record): &TimeRecordCtx) {
     let bounds = ctx.size().to_rect();
 
-    if let Some(hot) = &hot {
-        let hot_from = (**hot).clone();
-        if hot_from.eq(&*record.from) {
-            ctx.stroke(bounds, &TASK_ACTIVE_COLOR_BG, 2.0);
-        }
+    if ctx.is_hot() {
+        ctx.stroke(bounds, &TASK_ACTIVE_COLOR_BG, 2.0);
     }
 }
 
 impl ActivityLogWidget {
     fn new() -> ActivityLogWidget
     {
-        static FONT_CAPTION_DESCR: FontDescriptor =
-            FontDescriptor::new(FontFamily::SYSTEM_UI)
-            .with_weight(FontWeight::BOLD)
-            .with_size(14.0);
+        static FONT_LOG_DESCR: FontDescriptor = FontDescriptor::new(FontFamily::MONOSPACE);
 
-        let flex = Flex::row()
-            .with_child(Flex::column().with_child(Label::new("Task")
-                                                  .with_font(FONT_CAPTION_DESCR.clone()))
-                .with_child(
+        let flex = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start)
+
+            .with_child(
                     List::new(||{
                         Label::new(|(model, record): &TimeRecordCtx, _env: &_| {
                             if let Some(task) = model.0.tasks.get(&record.uid) {
-                                format!("{}", task.name)
-                            } else {
-                                "".to_string()
-                            }
-                        })
-                        .on_click(|_ctx, (data, what): &mut TimeRecordCtx, _env| {})
-                        .background(
-                            Painter::new(|ctx: &mut PaintCtx, data: &TimeRecordCtx, _env| {
-                                paint_log_entry(ctx, data);
-                            }))
-                    })
-                    .with_spacing(10.0)
-                    .padding(10.0)))
+                                let mut name =  format!("{}", task.name);
+                                name.truncate(15);
 
-            .with_child(
-                Flex::column().with_child(Label::new("Duration")
-                                          .with_font(FONT_CAPTION_DESCR.clone()))
-                .with_child(
-                    List::new(||{
-                        Label::new(|(model, record): &TimeRecordCtx, _env: &_| {
-                            if let Some(_) = model.0.tasks.get(&record.uid) {
-                                format_duration(record.to.signed_duration_since(*record.from))
-                            } else {
-                                "".to_string()
-                            }
-                        })
-                        .on_click(|_ctx, (data, what): &mut TimeRecordCtx, _env| {})
-                        .background(
-                            Painter::new(|ctx: &mut PaintCtx, data: &TimeRecordCtx, _env| {
-                                paint_log_entry(ctx, data);
-                            }))
-                    })
-                    .with_spacing(10.0)
-                    .padding(10.0)))
-            .with_child(
-                Flex::column().with_child(Label::new("When")
-                                          .with_font(FONT_CAPTION_DESCR.clone()))
-                .with_child(
-                    List::new(||{
-                        Label::new(|(model, record): &TimeRecordCtx, _env: &_| {
-                            if let Some(_) = model.0.tasks.get(&record.uid) {
+                                let duration = format_duration(record.to.signed_duration_since(*record.from));
+
                                 let now: DateTime<Local> = DateTime::from(SystemTime::now());
                                 let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
 
@@ -300,21 +257,20 @@ impl ActivityLogWidget {
                                     when.format("%H:%M").to_string()
                                 };
 
-                                format!("{}", time)
+                                format!("{:<15} {:<10} {:<10}", name, duration, time)
                             } else {
                                 "".to_string()
                             }
                         })
+                        .with_font(FONT_LOG_DESCR.clone())
                         .on_click(|_ctx, (data, what): &mut TimeRecordCtx, _env| {})
                         .background(
                             Painter::new(|ctx: &mut PaintCtx, data: &TimeRecordCtx, _env| {
                                 paint_log_entry(ctx, data);
                             }))
                     })
-                    .with_spacing(10.0)
-                    .padding(10.0)))
-            .padding((0.0, 10.0, 15.0, 0.0))
-            .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0)
+                    .with_spacing(10.0))
+            .padding((0.0, 0.0, 15.0, 0.0))
             .lens(lens::Identity.map(
                 |m: &AppModel| ((m.clone(), None),
                                 m.records.values().map(|v| v.clone()).rev().collect()),
@@ -571,6 +527,7 @@ fn ui_builder() -> impl Widget<AppModel> {
     time_column.add_child(
         Flex::row()
         .with_child(Label::new("Today:\nWeek:\nMonth:\nAll time:"))
+        .with_default_spacer()
         .with_child(
             Label::new(|model: &AppModel, _env: &_| {
 
@@ -615,10 +572,11 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     time_column.add_default_spacer();
 
+    time_column.add_child(Label::new("Activity log").with_font(FONT_CAPTION_DESCR.clone()).padding(10.0));
+
     time_column.add_flex_child(
-        Scroll::new(
-            ActivityLogWidget::new()
-        ), 1.0);
+        Scroll::new(ActivityLogWidget::new())
+            .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0), 1.0);
 
     main_row.add_child(time_column);
 
