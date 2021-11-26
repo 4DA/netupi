@@ -11,7 +11,7 @@ use druid::{
     Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     LifeCycle, FontDescriptor, FontFamily, Point, Widget, WidgetPod, WidgetExt};
 
-use druid::{Selector};
+use druid::{Selector, Cursor, Color};
 
 use chrono::prelude::*;
 
@@ -23,48 +23,47 @@ type TimeRecordCtx = (AppModel, TimeRecord);
 
 struct LogEntryController;
 
+pub static DELETING_TASK_BORDER: Color = Color::rgb8(204, 36, 29);
+
 impl LogEntryController {
     const CMD_HOT: Selector<Rc<DateTime<Utc>>> = Selector::new("alog_entry_hot");
     const CMD_COLD: Selector = Selector::new("alog_entry_cold");
 }
 
 impl<W: Widget<TimeRecordCtx>> Controller<TimeRecordCtx, W> for LogEntryController {
-    fn event(
-        &mut self,
-        child: &mut W,
-        ctx: &mut EventCtx,
-        event: &Event,
-        data: &mut TimeRecordCtx,
-        env: &Env,
-    ) {
+    fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event,
+        data: &mut TimeRecordCtx, env: &Env,)
+    {
         match event {
+            // Event::Command(cmd) if cmd.is(LogEntryController::CMD_HOT) => {
+            //     let value = cmd.get(LogEntryController::CMD_HOT).unwrap();
+
+            //     if (*value).eq(&data.1.from) {
+            //         ctx.set_handled();
+            //     }
+            // },
             _ => child.event(ctx, event, data, env),
         }
+
+        ctx.set_cursor(&Cursor::Pointer);
     }
 
     fn lifecycle(&mut self, child: &mut W, ctx: &mut LifeCycleCtx<'_, '_>,
                      event: &LifeCycle, data: &TimeRecordCtx, env: &Env)
     {
         match event {
+            // LifeCycle::HotChanged(value) => if *value {
+            //     ctx.submit_command(LogEntryController::CMD_HOT.with(data.1.from.clone()));
+            // },
+
             _ => child.lifecycle(ctx, event, data, env),
         }
     }
 }
 
-
-
-
 pub struct ActivityLogWidget {
     inner: WidgetPod<AppModel, Container<AppModel>>,
     hot: Option<Rc<DateTime<Utc>>>,
-}
-
-fn paint_log_entry(ctx: &mut PaintCtx, (_shared, __record): &TimeRecordCtx) {
-    let bounds = ctx.size().to_rect();
-
-    if ctx.is_hot() {
-        ctx.stroke(bounds, &TASK_ACTIVE_COLOR_BG, 2.0);
-    }
 }
 
 impl ActivityLogWidget {
@@ -100,19 +99,49 @@ impl ActivityLogWidget {
                             }
                         })
                         .with_font(FONT_LOG_DESCR.clone())
-                        .on_click(|_ctx, (_data, _what): &mut TimeRecordCtx, _env| {})
+
+                        .padding(6.0)
+                        .controller(LogEntryController)
+                        .on_click(|_ctx, (data, what): &mut TimeRecordCtx, _env| {
+                            data.records.remove(&what.from);
+                        })
                         .background(
-                            Painter::new(|ctx: &mut PaintCtx, data: &TimeRecordCtx, _env| {
-                                paint_log_entry(ctx, data);
+                            Painter::new(|ctx: &mut PaintCtx, _data: &TimeRecordCtx, _env| {
+                                let bounds = ctx.size().to_rect();
+
+                                if ctx.is_hot() {
+                                    ctx.stroke(bounds, &DELETING_TASK_BORDER, 2.0);
+                                }
                             }))
-                    })
-                    .with_spacing(10.0))
+
+                    }))
             .padding((0.0, 0.0, 15.0, 0.0))
             .lens(lens::Identity.map(
                 |m: &AppModel| (m.clone(),
                                 m.records.values().map(|v| v.clone()).rev().collect()),
 
-                |_outer: &mut AppModel, _inner: (AppModel, Vector<TimeRecord>)| {
+                |outer: &mut AppModel, inner: (AppModel, Vector<TimeRecord>)|
+                {
+                    if !outer.records.same(&inner.0.records) {
+                        outer.records = inner.0.records;
+
+                        let mut sums = TaskSums::new();
+                        let mut records = TimeRecordMap::new();
+
+                        for tr in inner.1 {
+                            records.insert(*tr.from.clone(), tr);
+                        }
+
+                        // TODO don't rebuild sums completely, touch only upper prefices
+                        for (uid, _) in &inner.0.tasks {
+                            let sum = build_time_prefix_sum(&inner.0.tasks, &records, uid.clone());
+                            sums.insert(uid.clone(), sum);
+                        }
+
+                        outer.task_sums = sums;
+
+                        // todo: remove time record from db
+                    }
                 },
             ));
 
