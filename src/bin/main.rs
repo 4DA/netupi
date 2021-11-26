@@ -9,13 +9,17 @@ use std::env;
 use druid::widget::prelude::*;
 use druid::im::{vector, Vector};
 use druid::lens::{self, LensExt};
-use druid::widget::{CrossAxisAlignment, Flex, Label, SizedBox, List, Scroll, Container, Painter};
+use druid::Lens;
+use druid::widget::{CrossAxisAlignment, Controller, Flex, Label, SizedBox, List, Scroll, Container, Painter};
 
 use druid::{
     AppLauncher, Application, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
+    LifeCycle,
     FontWeight, FontDescriptor, FontFamily, Point,
     Menu, MenuItem, TimerToken, KeyOrValue,
     LocalizedString, UnitPoint, Widget, WidgetPod, WidgetExt, WindowDesc, WindowId};
+
+use druid::{Selector};
 
 use chrono::prelude::*;
 
@@ -60,7 +64,8 @@ pub fn main() -> anyhow::Result<()> {
                               elapsed: Rc::new(chrono::Duration::zero())},
         selected_task: selected_task,
         focus_filter: FocusFilter::Current,
-        tag_filter: None
+        tag_filter: None,
+        hot_log_entry: None
     };
 
     let selected = data.get_uids_filtered().nth(0).unwrap_or("".to_string()).clone();
@@ -201,78 +206,178 @@ impl Widget<AppModel> for StatusBar {
     }
 }
 
+struct LogEntryController;
 
-fn activity_log_widget() -> impl Widget<AppModel> {
-    static FONT_CAPTION_DESCR: FontDescriptor =
-        FontDescriptor::new(FontFamily::SYSTEM_UI)
-        .with_weight(FontWeight::BOLD)
-        .with_size(14.0);
-
-    Flex::row()
-        .with_child(
-            Flex::column().with_child(Label::new("Task")
-                                      .with_font(FONT_CAPTION_DESCR.clone()))
-            .with_child(
-                List::new(||{
-                    Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
-                        if let Some(task) = model.tasks.get(&record.uid) {
-                            format!("{}", task.name)
-                        } else {
-                            "".to_string()
-                        }
-                    })
-                })
-                .with_spacing(10.0)
-                .padding(10.0)))
-
-        .with_child(
-            Flex::column().with_child(Label::new("Duration")
-                                      .with_font(FONT_CAPTION_DESCR.clone()))
-            .with_child(
-                List::new(||{
-                    Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
-                        if let Some(_) = model.tasks.get(&record.uid) {
-                            format_duration(record.to.signed_duration_since(*record.from))
-                        } else {
-                            "".to_string()
-                        }
-                    })
-                })
-                .with_spacing(10.0)
-                .padding(10.0)))
-        .with_child(
-            Flex::column().with_child(Label::new("When")
-                                      .with_font(FONT_CAPTION_DESCR.clone()))
-            .with_child(
-                List::new(||{
-                    Label::new(|(model, record): &(AppModel, TimeRecord), _env: &_| {
-                        if let Some(_) = model.tasks.get(&record.uid) {
-                            let now: DateTime<Local> = DateTime::from(SystemTime::now());
-                            let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
-
-                            let time = if now.year() > when.year() {
-                                when.format("%-d %b %y %H:%M").to_string()
-                            } else if now.ordinal() > when.ordinal() {
-                                when.format("%-d %b %H:%M").to_string()
-                            } else {
-                                when.format("%H:%M").to_string()
-                            };
-
-                            format!("{}", time)
-                        } else {
-                            "".to_string()
-                        }
-                    })
-                })
-                .with_spacing(10.0)
-                .padding(10.0)))
-        .padding((0.0, 10.0, 15.0, 0.0))
-        .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0)
-        .lens(lens::Identity.map(
-            |m: &AppModel| (m.clone(), m.records.values().map(|v| v.clone()).rev().collect()),
-            |_data: &mut AppModel, _m: (AppModel, Vector<TimeRecord>)| {},
-        ))
+impl LogEntryController {
+    const CMD_HOT: Selector<Rc<DateTime<Utc>>> = Selector::new("alog_entry_hot");
+    const CMD_COLD: Selector = Selector::new("alog_entry_cold");
 }
+
+type TimeRecordCtx = ((AppModel,Option<Rc<DateTime<Utc>>>),TimeRecord);
+
+use netupi::utils::type_of;
+
+struct ActivityLogWidget {
+    inner: WidgetPod<AppModel, Container<AppModel>>,
+    hot: Option<Rc<DateTime<Utc>>>,
+}
+
+fn paint_log_entry(ctx: &mut PaintCtx, ((shared, hot), record): &TimeRecordCtx) {
+    let bounds = ctx.size().to_rect();
+
+    if let Some(hot) = &hot {
+        let hot_from = (**hot).clone();
+        if hot_from.eq(&*record.from) {
+            ctx.stroke(bounds, &TASK_ACTIVE_COLOR_BG, 2.0);
+        }
+    }
+}
+
+impl ActivityLogWidget {
+    fn new() -> ActivityLogWidget
+    {
+        static FONT_CAPTION_DESCR: FontDescriptor =
+            FontDescriptor::new(FontFamily::SYSTEM_UI)
+            .with_weight(FontWeight::BOLD)
+            .with_size(14.0);
+
+        let flex = Flex::row()
+            .with_child(Flex::column().with_child(Label::new("Task")
+                                                  .with_font(FONT_CAPTION_DESCR.clone()))
+                .with_child(
+                    List::new(||{
+                        Label::new(|(model, record): &TimeRecordCtx, _env: &_| {
+                            if let Some(task) = model.0.tasks.get(&record.uid) {
+                                format!("{}", task.name)
+                            } else {
+                                "".to_string()
+                            }
+                        })
+                        .on_click(|_ctx, (data, what): &mut TimeRecordCtx, _env| {})
+                        .background(
+                            Painter::new(|ctx: &mut PaintCtx, data: &TimeRecordCtx, _env| {
+                                paint_log_entry(ctx, data);
+                            }))
+                    })
+                    .with_spacing(10.0)
+                    .padding(10.0)))
+
+            .with_child(
+                Flex::column().with_child(Label::new("Duration")
+                                          .with_font(FONT_CAPTION_DESCR.clone()))
+                .with_child(
+                    List::new(||{
+                        Label::new(|(model, record): &TimeRecordCtx, _env: &_| {
+                            if let Some(_) = model.0.tasks.get(&record.uid) {
+                                format_duration(record.to.signed_duration_since(*record.from))
+                            } else {
+                                "".to_string()
+                            }
+                        })
+                        .on_click(|_ctx, (data, what): &mut TimeRecordCtx, _env| {})
+                        .background(
+                            Painter::new(|ctx: &mut PaintCtx, data: &TimeRecordCtx, _env| {
+                                paint_log_entry(ctx, data);
+                            }))
+                    })
+                    .with_spacing(10.0)
+                    .padding(10.0)))
+            .with_child(
+                Flex::column().with_child(Label::new("When")
+                                          .with_font(FONT_CAPTION_DESCR.clone()))
+                .with_child(
+                    List::new(||{
+                        Label::new(|(model, record): &TimeRecordCtx, _env: &_| {
+                            if let Some(_) = model.0.tasks.get(&record.uid) {
+                                let now: DateTime<Local> = DateTime::from(SystemTime::now());
+                                let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
+
+                                let time = if now.year() > when.year() {
+                                    when.format("%-d %b %y, %H:%M").to_string()
+                                } else if now.ordinal() > when.ordinal() {
+                                    when.format("%-d %b, %H:%M").to_string()
+                                } else {
+                                    when.format("%H:%M").to_string()
+                                };
+
+                                format!("{}", time)
+                            } else {
+                                "".to_string()
+                            }
+                        })
+                        .on_click(|_ctx, (data, what): &mut TimeRecordCtx, _env| {})
+                        .background(
+                            Painter::new(|ctx: &mut PaintCtx, data: &TimeRecordCtx, _env| {
+                                paint_log_entry(ctx, data);
+                            }))
+                    })
+                    .with_spacing(10.0)
+                    .padding(10.0)))
+            .padding((0.0, 10.0, 15.0, 0.0))
+            .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0)
+            .lens(lens::Identity.map(
+                |m: &AppModel| ((m.clone(), None),
+                                m.records.values().map(|v| v.clone()).rev().collect()),
+
+                |outer: &mut AppModel, inner: ((AppModel, Option<Rc<DateTime<Utc>>>), Vector<TimeRecord>)| {
+                },
+            ));
+
+        ActivityLogWidget {inner: WidgetPod::new(Container::new(flex)), hot: None}
+    }
+}
+
+impl Widget<AppModel> for ActivityLogWidget {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event,
+             data: &mut AppModel, _env: &Env) {
+
+        match event {
+            Event::Command(cmd) if cmd.is(LogEntryController::CMD_HOT) => {
+                ctx.set_handled();
+
+                let value = cmd.get(LogEntryController::CMD_HOT).unwrap().clone();
+
+                if let Some(prev_hot) = &self.hot {
+                    if !prev_hot.same(&value) {
+                        self.hot = Some(value);
+                    }
+                } else {
+                    self.hot = Some(value);
+                }
+
+                ctx.request_paint();
+            },
+            Event::Command(cmd) if cmd.is(LogEntryController::CMD_COLD) => {
+                ctx.set_handled();
+                self.hot = None;
+            },
+            _ => self.inner.event(ctx, event, data, _env),
+        }
+    }
+
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &AppModel, _env: &Env) {
+        match event {
+
+            _ => self.inner.lifecycle(ctx, event, _data, _env)
+        };
+    }
+
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &AppModel, _data: &AppModel, _env: &Env) {
+        self.inner.update(_ctx, _data, _env)
+    }
+
+    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &AppModel, env: &Env,
+    ) -> Size {
+        let ret = self.inner.layout(ctx, bc, data, env);
+        self.inner.set_origin(ctx, &data, env, Point::new(10.0, 10.0));
+        ret
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &AppModel, env: &Env) {
+        self.inner.paint(ctx, data, env);
+    }
+}
+
 
 fn ui_builder() -> impl Widget<AppModel> {
     let mut root = Flex::column();
@@ -512,7 +617,7 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     time_column.add_flex_child(
         Scroll::new(
-            activity_log_widget()
+            ActivityLogWidget::new()
         ), 1.0);
 
     main_row.add_child(time_column);
