@@ -18,6 +18,7 @@ use chrono::prelude::*;
 use crate::task::*;
 use crate::app_model::*;
 use crate::common::*;
+use crate::db;
 
 type TimeRecordCtx = (AppModel, TimeRecord);
 
@@ -123,24 +124,26 @@ impl ActivityLogWidget {
                 |outer: &mut AppModel, inner: (AppModel, Vector<TimeRecord>)|
                 {
                     if !outer.records.same(&inner.0.records) {
+                        let diff = outer.records.clone().difference(inner.0.records.clone());
                         outer.records = inner.0.records;
 
                         let mut sums = TaskSums::new();
-                        let mut records = TimeRecordMap::new();
-
-                        for tr in inner.1 {
-                            records.insert(*tr.from.clone(), tr);
-                        }
 
                         // TODO don't rebuild sums completely, touch only upper prefices
                         for (uid, _) in &inner.0.tasks {
-                            let sum = build_time_prefix_sum(&inner.0.tasks, &records, uid.clone());
+                            let sum = build_time_prefix_sum(&inner.0.tasks, &outer.records,
+                                                            uid.clone());
                             sums.insert(uid.clone(), sum);
                         }
 
-                        outer.task_sums = sums;
+                        // remove deleted time records from db
+                        for (_k, d) in &diff {
+                                if let Err(what) = db::remove_time_record(inner.0.db.clone(), d) {
+                                    println!("db error: {}", what);
+                                }
+                        }
 
-                        // todo: remove time record from db
+                        outer.task_sums = sums;
                     }
                 },
             ));

@@ -196,6 +196,18 @@ pub fn add_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::Res
     Ok(())
 }
 
+pub fn remove_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::Result<()>
+{
+    conn.execute(
+        "DELETE FROM time_records WHERE ts_from = ?1",
+        params![TimeWrapper(*record.from)],
+    )?;
+
+    println!("remove ok | t: {:?}", &record);
+
+    Ok(())
+}
+
 pub fn get_time_records(conn: Rc<Connection>, from: &DateTime<Utc>, to: &DateTime<Utc>)
                         -> anyhow::Result<TimeRecordMap>
 {
