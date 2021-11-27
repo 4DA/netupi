@@ -1,8 +1,8 @@
 [package]
 name = "netupi"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2018"
-default-run = "main"
+default-run = "netupi"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
