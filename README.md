@@ -26,11 +26,16 @@ i.e. `/Users/Alice/Library/Application Support/netupi`
 i.e. `C:\Users\Alice\AppData\Roaming\netupi`
 
 # Configuration
-- TBD
+    No configuration at the moment.
+
+# Importing CSV from [Goodtime](https://f-droid.org/en/packages/com.apps.adrcotfas.goodtime/)
+```
+cargo run --bin import_csv <filename>
+```
 
 # Building
 1. install [rust](https://www.rust-lang.org/tools/install)
-2. make sure you have sqlite3
+2. make sure you have sqlite3 (+ alsa-dev for linux)
 3. cargo build --release
 
 # Installing
