@@ -120,7 +120,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 data.0.tasks.insert(uid.clone(), task);
                 data.0.task_sums.insert(uid.clone(), TimePrefixSum::new());
                 data.0.update_tags();
-                ctx.submit_command(COMMAND_DETAILS_REQUEST_FOCUS.with(()));
+                ctx.submit_command(COMMAND_DETAILS_REQUEST_FOCUS.with(TASK_NAME_EDIT_WIDGET));
                 ctx.request_update();
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_COMPLETED) => {
@@ -230,6 +230,10 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
 
             Event::KeyUp(key) if key.code == druid::Code::KeyN => {
                 ctx.submit_command(COMMAND_TASK_NEW.with(()));
+            },
+
+            Event::KeyUp(key) if key.code == druid::Code::KeyE => {
+                ctx.submit_command(COMMAND_DETAILS_REQUEST_FOCUS.with(TASK_NAME_EDIT_WIDGET));
             },
 
             Event::KeyUp(key) if key.code == druid::Code::Tab => {

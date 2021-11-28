@@ -239,9 +239,11 @@ impl<T, W: Widget<T>> Controller<T, W> for TaskDetailsController {
 
         match event {
             Event::Command(cmd) if cmd.is(COMMAND_DETAILS_REQUEST_FOCUS) => {
-                let command = Command::new(editable_label::BEGIN_EDITING, (),
-                                           Target::Widget(TASK_NAME_EDIT_WIDGET));
+                let command =
+                    Command::new(editable_label::BEGIN_EDITING, (),
+                        Target::Widget(cmd.get(COMMAND_DETAILS_REQUEST_FOCUS).unwrap().clone()));
                 ctx.submit_command(command);
+                ctx.set_handled();
 
             },
 
