@@ -10,6 +10,7 @@ use druid::widget::{Label, List, Controller, ControllerHost, Container, Painter,
 use druid::{PaintCtx, RenderContext, Env, Event, EventCtx, Point,
             Menu, MenuItem, TimerToken, LocalizedString, UnitPoint, Widget, WidgetPod, WidgetExt,};
 
+use notify_rust::Notification;
 
 use chrono::prelude::*;
 
@@ -159,9 +160,22 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                     match data.0.tracking.state.clone() {
                         TrackingState::Active(uid) => {
                             stop_tracking(&mut data.0, TrackingState::Inactive);
+
+                            Notification::new()
+                                .summary(&format!("netupi: \"{}\" session finished",
+                                               data.0.tasks.get(&uid).unwrap().name))
+                                .show().unwrap();
+
                             start_rest(&mut data.0, uid, ctx);
                         },
-                        TrackingState::Break(_) => {data.0.tracking.state = TrackingState::Inactive},
+                        TrackingState::Break(uid) => {
+                            Notification::new()
+                                .summary(&format!("netupi: \"{}\" break finished",
+                                               data.0.tasks.get(&uid).unwrap().name))
+                                .show().unwrap();
+
+                            data.0.tracking.state = TrackingState::Inactive
+                        },
                         _ => {},
                     };
                 }
