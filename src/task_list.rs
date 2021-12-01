@@ -161,6 +161,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                         TrackingState::Active(uid) => {
                             stop_tracking(&mut data.0, TrackingState::Inactive);
 
+                            #[cfg(not(target_os = "windows"))]
                             Notification::new()
                                 .summary(&format!("netupi: \"{}\" session finished",
                                                data.0.tasks.get(&uid).unwrap().name))
@@ -169,6 +170,8 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                             start_rest(&mut data.0, uid, ctx);
                         },
                         TrackingState::Break(uid) => {
+
+                            #[cfg(not(target_os = "windows"))]
                             Notification::new()
                                 .summary(&format!("netupi: \"{}\" break finished",
                                                data.0.tasks.get(&uid).unwrap().name))
