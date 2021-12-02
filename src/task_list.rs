@@ -422,7 +422,17 @@ fn start_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
     data.tracking.timestamp = Rc::new(Utc::now());
     data.tracking.elapsed = Rc::new(chrono::Duration::zero());
     data.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval(data, &uid).to_std().unwrap()));
-    data.tasks.get_mut(&uid).unwrap().task_status = TaskStatus::InProcess;
+
+    let mut task = data.tasks.get_mut(&uid).expect(&format!("unknown task {}", &uid));
+    let needs_update = task.task_status != TaskStatus::InProcess;
+
+    task.task_status = TaskStatus::InProcess;
+
+    if needs_update {
+        if let Err(what) = db::update_task(data.db.clone(), &task) {
+            println!("db error: {}", what);
+        }
+    }
 
     if data.focus_filter == FocusFilter::Completed {
         data.focus_filter = FocusFilter::Current;
