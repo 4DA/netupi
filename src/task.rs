@@ -24,7 +24,6 @@ pub enum TaskStatus {
     NeedsAction,
     Completed,
     InProcess,
-    Cancelled,
     Archived
 }
 
@@ -33,9 +32,8 @@ impl TaskStatus {
     fn to_string(&self) -> &str {
         match &self {
             TaskStatus::NeedsAction => "Needs action",
-            TaskStatus::Completed    => "Completed",
+            TaskStatus::Completed   => "Completed",
             TaskStatus::InProcess   => "In process",
-            TaskStatus::Cancelled    => "Cancelled",
             TaskStatus::Archived    => "Archived",
             _ => {panic!("Unknown status {:?}", self);}
         }

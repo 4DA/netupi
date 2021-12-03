@@ -112,7 +112,6 @@ fn task_edit_widget() -> impl Widget<Task> {
             .with_child(Radio::new("needs action" , TaskStatus::NeedsAction))
             .with_child(Radio::new("in process"   , TaskStatus::InProcess))
             .with_child(Radio::new("completed"    , TaskStatus::Completed))
-            .with_child(Radio::new("cancelled"    , TaskStatus::Cancelled))
             .lens(lens::Map::new(
                 |task: &Task| task.task_status.clone(),
                 |task: &mut Task, status| task.task_status = status))

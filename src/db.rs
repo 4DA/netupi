@@ -161,7 +161,8 @@ pub fn get_tasks(conn: Rc<Connection>) -> anyhow::Result<(TaskMap, TagSet)>
             description    : row.get(3)?,
             tags           : tag_set,
             priority       : row.get::<usize, u32>(5)?,
-            task_status    : serde_json::from_str::<TaskStatus>(&stat_str).unwrap(),
+            task_status    : serde_json::from_str::<TaskStatus>(&stat_str)
+                             .unwrap_or(TaskStatus::NeedsAction),
             work_duration  : Rc::new(work_duration.0),
             break_duration : Rc::new(rest_duration.0),
             color          : row.get::<usize, u32>(9)?,
