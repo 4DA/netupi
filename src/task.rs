@@ -40,6 +40,36 @@ impl TaskStatus {
     }
 }
 
+#[derive(Debug, Clone, Data, PartialEq)]
+pub enum CuaPriority {
+    Unspecified,
+    Low,
+    Normal,
+    High,
+}
+
+impl From<u32> for CuaPriority {
+    fn from(value: u32) -> Self {
+        match value {
+            1..=4 => CuaPriority::High,
+            5 => CuaPriority::Normal,
+            6..=9 => CuaPriority::Low,
+            _ => CuaPriority::Unspecified,
+        }
+    }
+}
+
+impl From<CuaPriority> for u32 {
+    fn from(pri: CuaPriority) -> Self {
+        match pri {
+            CuaPriority::High => 1,
+            CuaPriority::Normal => 5,
+            CuaPriority::Low => 9,
+            CuaPriority::Unspecified => 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Data, Lens)]
 pub struct Task {
     pub uid: String,
@@ -83,7 +113,7 @@ impl Task {
 
     pub fn new_simple(name: String) -> Task {
         Task::new(name, "".to_string(), generate_uid(), OrdSet::new(),
-                  0, TaskStatus::NeedsAction,
+                  5, TaskStatus::NeedsAction,
                   chrono::Duration::minutes(50),
                   chrono::Duration::minutes(10), 0)
     }

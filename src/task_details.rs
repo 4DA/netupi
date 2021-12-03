@@ -117,6 +117,20 @@ fn task_edit_widget() -> impl Widget<Task> {
                 |task: &mut Task, status| task.task_status = status))
     );
 
+    column.add_spacer(25.0);
+
+    column.add_child(
+        Flex::row()
+            .with_child(Label::new("Priority") .with_font(FONT_CAPTION_DESCR.clone()))
+            .with_default_spacer()
+            .with_child(Radio::new("low"         , CuaPriority::Low))
+            .with_child(Radio::new("normal"      , CuaPriority::Normal))
+            .with_child(Radio::new("high"        , CuaPriority::High))
+            .lens(lens::Map::new(
+                |task: &Task| task.priority.into(),
+                |task: &mut Task, pri: CuaPriority| task.priority = pri.into()))
+    );
+
     column.add_spacer(15.0);
 
     let new_tag_edit = EditableLabel::parse()
