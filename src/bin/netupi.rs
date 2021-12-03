@@ -65,7 +65,7 @@ pub fn main() -> anyhow::Result<()> {
         hot_log_entry: None
     };
 
-    let selected = data.get_uids_filtered().nth(0).unwrap_or("".to_string()).clone();
+    let selected = data.get_uids_filtered().front().unwrap_or(&"".to_string()).clone();
     data.selected_task = selected;
 
     // TODO should be done in ctor
@@ -311,7 +311,7 @@ fn ui_builder() -> impl Widget<AppModel> {
     let task_list_widget = TaskListWidget::new()
         .lens(lens::Identity.map(
             // Expose shared data with children data
-            |d: &AppModel| (d.clone(), d.get_uids_filtered().collect()),
+            |d: &AppModel| (d.clone(), d.get_uids_filtered()),
             |d: &mut AppModel, x: (AppModel, Vector<String>)| {
                 // If shared data was changed reflect the changes in our AppModel
                 *d = x.0

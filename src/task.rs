@@ -1,3 +1,4 @@
+use core::cmp::Ordering;
 use std::ops::Add;
 use std::rc::Rc;
 use std::time::SystemTime;
@@ -19,7 +20,7 @@ pub type TimeRecordMap = OrdMap<DateTime<Utc>, TimeRecord>;
 pub type TimePrefixSum = OrdMap<DateTime<Utc>, TimePrefix>;
 pub type TaskSums      = OrdMap::<String, TimePrefixSum>;
 
-#[derive(Debug, Clone, Data, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Data, PartialEq, Serialize, Deserialize, Eq)]
 pub enum TaskStatus {
     NeedsAction,
     Completed,
@@ -70,7 +71,7 @@ impl From<CuaPriority> for u32 {
     }
 }
 
-#[derive(Debug, Clone, Data, Lens)]
+#[derive(Debug, Clone, Data, Lens, Eq)]
 pub struct Task {
     pub uid: String,
     pub seq: u32,
@@ -89,6 +90,32 @@ pub struct TimeRecord {
     pub from: Rc<DateTime<Utc>>,
     pub to: Rc<DateTime<Utc>>,
     pub uid: String
+}
+
+impl Ord for Task {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.priority < other.priority {
+            Ordering::Less
+        } else if self.priority > other.priority{
+            Ordering::Greater
+        } else {
+            self.name.cmp(&other.name)
+        }
+    }
+}
+
+
+impl PartialOrd for Task {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+
+impl PartialEq for Task {
+    fn eq(&self, other: &Self) -> bool {
+        self.same(&other)
+    }
 }
 
 impl TimeRecord {

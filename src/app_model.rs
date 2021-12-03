@@ -65,30 +65,40 @@ pub fn get_rest_interval(model: &AppModel, uid: &String) -> chrono::Duration {
 }
 
 impl AppModel {
-    pub fn get_uids_filtered(&self) -> impl Iterator<Item = String> + '_ {
-        self.tasks.keys().cloned().filter(move |uid| {
-            let task = self.tasks.get(uid).expect("unknown uid");
+    fn passes_filter(&self, task: &Task) -> bool {
+        let focus_ok = match self.focus_filter {
+            FocusFilter::Current => {task.task_status == TaskStatus::NeedsAction ||
+                                     task.task_status == TaskStatus::InProcess},
+            FocusFilter::Completed => task.task_status == TaskStatus::Completed,
+            FocusFilter::All => task.task_status != TaskStatus::Archived,
+        };
 
-            let focus_ok = match self.focus_filter {
-                FocusFilter::Current => {task.task_status == TaskStatus::NeedsAction ||
-                              task.task_status == TaskStatus::InProcess},
-                FocusFilter::Completed => task.task_status == TaskStatus::Completed,
-                FocusFilter::All => task.task_status != TaskStatus::Archived,
+        let tag_ok =
+            if let Some(ref tag_filter) = self.tag_filter {
+                task.tags.contains(tag_filter)
+            } else {
+                true
             };
 
-            let tag_ok =
-                if let Some(ref tag_filter) = self.tag_filter {
-                    task.tags.contains(tag_filter)
-                } else {
-                    true
-                };
+        return focus_ok && tag_ok;
+    }
 
-            return focus_ok && tag_ok;
-        })
+    pub fn get_tasks_filtered(&self) -> Vector<Task> {
+        let mut elems = self.tasks.values()
+            .filter(|t| self.passes_filter(&t))
+            .collect::<Vector<&Task>>();
+
+        elems.sort_by(|v1: &&Task, v2: &&Task| v1.cmp(v2));
+
+        return elems.iter().map(|v| v.clone()).cloned().collect();
+    }
+
+    pub fn get_uids_filtered(&self) -> Vector<String> {
+        return self.get_tasks_filtered().into_iter().map(|t| t.uid).collect();
     }
 
     pub fn check_update_selected(&mut self) {
-        let filtered: Vector<String> = self.get_uids_filtered().collect();
+        let filtered: Vector<String> = self.get_uids_filtered();
 
         // select any task if currently selected is filtered out
         if !filtered.contains(&self.selected_task) {

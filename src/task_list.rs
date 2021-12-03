@@ -189,29 +189,33 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             //TODO think of better implementation
             Event::KeyUp(key) if key.code == druid::Code::ArrowDown => {
                 let mut next = None;
-                for x in data.0.get_uids_filtered() {
-                    if x > data.0.selected_task {
+                let selected = data.0.tasks.get(&data.0.selected_task).unwrap();
+
+                for x in data.0.get_tasks_filtered() {
+                    if x > *selected {
                         next = Some(x);
                         break;
                     }
                 }
 
                 if let Some(next) = next {
-                    data.0.selected_task = next;
+                    data.0.selected_task = next.uid
                 }
             },
 
             Event::KeyUp(key) if key.code == druid::Code::ArrowUp => {
                 let mut next = None;
-                for x in data.0.get_uids_filtered() {
-                    if x == data.0.selected_task {
+                let selected = data.0.tasks.get(&data.0.selected_task).unwrap();
+
+                for x in data.0.get_tasks_filtered() {
+                    if x == *selected {
                         break;
                     }
                     next = Some(x);
                 }
 
                 if let Some(next) = next {
-                    data.0.selected_task = next;
+                    data.0.selected_task = next.uid;
                 }
             },
 
