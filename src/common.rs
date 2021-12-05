@@ -21,11 +21,6 @@ pub const COMMAND_TLIST_REQUEST_FOCUS: Selector    = Selector::new("tlist_reques
 
 pub const COMMAND_DETAILS_REQUEST_FOCUS: Selector<WidgetId>  = Selector::new("tdetails_request_focus");
 
-
-pub const TASK_FOCUS_CURRENT: &str   = "Current";
-pub const TASK_FOCUS_COMPLETED: &str = "Completed";
-pub const TASK_FOCUS_ALL: &str       = "All";
-
 pub const TASK_NAME_EDIT_WIDGET: WidgetId = WidgetId::reserved(1000);
 
 pub type BellBytes = &'static [u8; 5016];

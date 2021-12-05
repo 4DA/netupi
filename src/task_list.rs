@@ -438,8 +438,8 @@ fn start_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
         }
     }
 
-    if data.focus_filter == FocusFilter::Completed {
-        data.focus_filter = FocusFilter::Current;
+    if data.focus_filter == FocusFilter::Status(TaskStatus::Completed) {
+        data.focus_filter = FocusFilter::Status(TaskStatus::InProcess);
     }
 
     data.tracking.state = TrackingState::Active(uid);

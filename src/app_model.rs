@@ -17,16 +17,14 @@ pub enum TrackingState {
 
 #[derive(Debug, Clone, PartialEq, Data)]
 pub enum FocusFilter {
-    Current,
-    Completed,
+    Status(TaskStatus),
     All
 }
 
 impl FocusFilter {
-    pub fn as_str(&self) -> &str {
+    pub fn to_string(&self) -> &str {
         match &self {
-            FocusFilter::Current => "Current",
-            FocusFilter::Completed => "Completed",
+            FocusFilter::Status(x) => x.to_string(),
             FocusFilter::All => "All",
         }
     }
@@ -67,9 +65,7 @@ pub fn get_rest_interval(model: &AppModel, uid: &String) -> chrono::Duration {
 impl AppModel {
     fn passes_filter(&self, task: &Task) -> bool {
         let focus_ok = match self.focus_filter {
-            FocusFilter::Current => {task.task_status == TaskStatus::NeedsAction ||
-                                     task.task_status == TaskStatus::InProcess},
-            FocusFilter::Completed => task.task_status == TaskStatus::Completed,
+            FocusFilter::Status(ref x) => x.eq(&task.task_status),
             FocusFilter::All => task.task_status != TaskStatus::Archived,
         };
 

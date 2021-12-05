@@ -60,7 +60,7 @@ pub fn main() -> anyhow::Result<()> {
                               timer_id: Rc::new(TimerToken::INVALID),
                               elapsed: Rc::new(chrono::Duration::zero())},
         selected_task: selected_task,
-        focus_filter: FocusFilter::Current,
+        focus_filter: FocusFilter::Status(TaskStatus::InProcess), // select filter of last tracked task
         tag_filter: None,
         hot_log_entry: None
     };
@@ -223,7 +223,7 @@ fn ui_builder() -> impl Widget<AppModel> {
     focus_column.add_child(
         List::new(|| {
             Container::new(
-                Label::new(|item: &(AppModel, FocusFilter), _env: &_| format!("{}", item.1.as_str()))
+                Label::new(|item: &(AppModel, FocusFilter), _env: &_| format!("{}", item.1.to_string()))
                     .align_vertical(UnitPoint::LEFT)
                     .padding(10.0)
                     .background(
@@ -246,7 +246,10 @@ fn ui_builder() -> impl Widget<AppModel> {
         .with_spacing(10.0)
         .lens(lens::Identity.map(
             // Expose shared data with children data
-            |d: &AppModel| (d.clone(), vector![FocusFilter::Current, FocusFilter::Completed, FocusFilter::All]),
+            |d: &AppModel| (d.clone(), vector![FocusFilter::Status(TaskStatus::NeedsAction),
+                                               FocusFilter::Status(TaskStatus::InProcess),
+                                               FocusFilter::Status(TaskStatus::Completed),
+                                               FocusFilter::All]),
             |d: &mut AppModel, x: (AppModel, Vector<FocusFilter>)| {
                 // If shared data was changed reflect the changes in our AppModel
                 *d = x.0

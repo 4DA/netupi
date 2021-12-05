@@ -30,7 +30,7 @@ pub enum TaskStatus {
 
 impl TaskStatus {
     #[allow(unused)]
-    fn to_string(&self) -> &str {
+    pub fn to_string(&self) -> &str {
         match &self {
             TaskStatus::NeedsAction => "Needs action",
             TaskStatus::Completed   => "Completed",
