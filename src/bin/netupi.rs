@@ -27,7 +27,7 @@ use netupi::task_list::*;
 use netupi::task_details::*;
 use netupi::activity_log::*;
 use netupi::common::*;
-
+use netupi::time;
 
 pub fn main() -> anyhow::Result<()> {
     let _args: Vec<String> = env::args().collect();
@@ -125,7 +125,7 @@ fn get_status_string(d: &AppModel) -> String {
             let total = get_work_interval(d, uid);
 
             format!("Active: '{}' | Elapsed: {} / {}",
-                    active_task.name, format_duration(duration), format_duration(total))
+                    active_task.name, time::format_duration(&duration), time::format_duration(&total))
         },
         TrackingState::Break(ref uid) => {
             let rest_task = &d.tasks.get(uid).expect("unknown uid");
@@ -136,15 +136,15 @@ fn get_status_string(d: &AppModel) -> String {
             let total = get_rest_interval(d, uid);
 
             format!("Break: '{}' | Elapsed: {} / {}",
-                    rest_task.name, format_duration(duration), format_duration(total))
+                    rest_task.name, time::format_duration(&duration), time::format_duration(&total))
         },
         TrackingState::Paused(ref uid) => {
             let active_task = &d.tasks.get(uid).expect("unknown uid");
 
             format!("Paused: '{}' | Elapsed: {} / {}",
                     active_task.name,
-                    format_duration(*(&d.tracking.elapsed).clone()),
-                    format_duration(get_work_interval(d, uid)))
+                    time::format_duration(&d.tracking.elapsed),
+                    time::format_duration(&get_work_interval(d, uid)))
         },
 
         _ => format!("")
@@ -394,43 +394,30 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     time_column.add_child(
         Flex::row()
-        .with_child(Label::new("Today:\nWeek:\nMonth:\nAll time:"))
+        .with_child(Label::new("Today:\nWeek:\nMonth:\nYear:\nAll time:"))
         .with_default_spacer()
         .with_child(
             Label::new(|model: &AppModel, _env: &_| {
 
                 let mut result = String::new();
 
-                let now = Local::now();
-                let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
+                let duration = time::get_durations(&model.task_sums);
 
-                let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
-                let total_day = get_total_time_from_sums(&model.task_sums, &day_start);
-
-                let total = get_total_time_from_sums(&model.task_sums, &epoch);
-
-                result.push_str(&format_duration(total_day.clone()));
+                result.push_str(&time::format_duration(&duration.day));
                 result.push_str("\n");
 
-                Utc.from_local_datetime(
-                    &NaiveDate::from_isoywd(now.year(), now.iso_week().week(), Weekday::Mon)
-                        .and_time(NaiveTime::from_hms(0,0,0)))
-                    .single()
-                    .map(|utc| result.push_str(
-                        & format_duration(get_total_time_from_sums(&model.task_sums, &utc))));
+                result.push_str(&time::format_duration(&duration.week));
                 result.push_str("\n");
 
-                Utc.from_local_datetime(
-                    &NaiveDate::from_ymd(now.year(), now.month(), 1)
-                        .and_time(NaiveTime::from_hms(0, 0, 0)))
-                    .single()
-                    .map(|utc| result.push_str(
-                        & format_duration(get_total_time_from_sums(&model.task_sums, &utc))));
+                result.push_str(&time::format_duration(&duration.month));
                 result.push_str("\n");
 
-                result.push_str(&format_duration(total.clone()));
+                result.push_str(&time::format_duration(&duration.year));
+                result.push_str("\n");
 
-                result
+                result.push_str(&time::format_duration(&duration.total));
+
+                return result;
         }))
         .padding(10.0)
         .lens(lens::Identity.map(

@@ -17,7 +17,7 @@ use chrono::prelude::*;
 
 use crate::task::*;
 use crate::app_model::*;
-use crate::common::*;
+use crate::time;
 use crate::db;
 
 type TimeRecordCtx = (AppModel, TimeRecord);
@@ -81,7 +81,8 @@ impl ActivityLogWidget {
                                 let mut name =  format!("{}", task.name);
                                 name.truncate(15);
 
-                                let duration = format_duration(record.to.signed_duration_since(*record.from));
+                                let duration = time::format_duration(
+                                    &record.to.signed_duration_since(*record.from));
 
                                 let now: DateTime<Local> = DateTime::from(SystemTime::now());
                                 let when: DateTime<Local> = DateTime::<Local>::from(*record.from);

@@ -1,5 +1,6 @@
 use std::rc::Rc;
 use chrono::Duration;
+use chrono::prelude::*;
 
 use druid::im::{Vector, OrdSet};
 use druid::lens::{self, LensExt};
@@ -14,8 +15,7 @@ use crate::editable_label;
 use crate::editable_label::EditableLabel;
 use crate::task::*;
 use crate::common::*;
-
-use chrono::prelude::*;
+use crate::time;
 
 pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
     static FONT_CAPTION_DESCR: FontDescriptor =
@@ -33,37 +33,26 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
     column.add_default_spacer();
     column.add_child(
         Flex::row()
-        .with_child(Label::new("Today\nWeek\nMonth\nTotal"))
+        .with_child(Label::new("Today\nWeek\nMonth\nYear\nTotal"))
         .with_child(
             Label::new(|(_, sum): &(Task, TimePrefixSum), _env: &_| {
                 let mut result = String::new();
 
-                let now = Local::now();
-                let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
+                let duration = time::get_duration(sum, &Local::now());
 
-                let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
-                let total_day = get_total_time(sum, &day_start);
-
-                let total = get_total_time(sum, &epoch);
-
-                result.push_str(&format_duration(total_day.clone()));
+                result.push_str(&time::format_duration(&duration.day));
                 result.push_str("\n");
 
-                Utc.from_local_datetime(
-                    &NaiveDate::from_isoywd(now.year(), now.iso_week().week(), Weekday::Mon)
-                        .and_time(NaiveTime::from_hms(0,0,0)))
-                    .single()
-                    .map(|utc| result.push_str(&format_duration(get_total_time(sum, &utc))));
+                result.push_str(&time::format_duration(&duration.week));
                 result.push_str("\n");
 
-                Utc.from_local_datetime(
-                    &NaiveDate::from_ymd(now.year(), now.month(), 1)
-                        .and_time(NaiveTime::from_hms(0, 0, 0)))
-                    .single()
-                    .map(|utc| result.push_str(&format_duration(get_total_time(sum, &utc))));
+                result.push_str(&time::format_duration(&duration.month));
                 result.push_str("\n");
 
-                result.push_str(&format_duration(total.clone()));
+                result.push_str(&time::format_duration(&duration.year));
+                result.push_str("\n");
+
+                result.push_str(&time::format_duration(&duration.total));
 
                 return result;
             }))
