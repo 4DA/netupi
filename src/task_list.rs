@@ -423,14 +423,16 @@ fn resume_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
 }
 
 fn start_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
+    use TaskStatus::*;
+
     data.tracking.timestamp = Rc::new(Utc::now());
     data.tracking.elapsed = Rc::new(chrono::Duration::zero());
     data.tracking.timer_id = Rc::new(ctx.request_timer(get_work_interval(data, &uid).to_std().unwrap()));
 
     let mut task = data.tasks.get_mut(&uid).expect(&format!("unknown task {}", &uid));
-    let needs_update = task.task_status != TaskStatus::InProcess;
+    let needs_update = task.task_status != InProcess;
 
-    task.task_status = TaskStatus::InProcess;
+    task.task_status = InProcess;
 
     if needs_update {
         if let Err(what) = db::update_task(data.db.clone(), &task) {
@@ -438,9 +440,12 @@ fn start_tracking(data: &mut AppModel, uid: String, ctx: &mut EventCtx) {
         }
     }
 
-    if data.focus_filter == FocusFilter::Status(TaskStatus::Completed) {
-        data.focus_filter = FocusFilter::Status(TaskStatus::InProcess);
-    }
+    data.focus_filter =
+    match data.focus_filter {
+        FocusFilter::Status(Completed) |
+        FocusFilter::Status(NeedsAction) => FocusFilter::Status(InProcess),
+        ref st => st.clone(),
+    };
 
     data.tracking.state = TrackingState::Active(uid);
 }

@@ -60,7 +60,7 @@ pub fn main() -> anyhow::Result<()> {
                               timer_id: Rc::new(TimerToken::INVALID),
                               elapsed: Rc::new(chrono::Duration::zero())},
         selected_task: selected_task,
-        focus_filter: FocusFilter::Status(TaskStatus::InProcess), // select filter of last tracked task
+        focus_filter: FocusFilter::All, // select filter of last tracked task
         tag_filter: None,
         hot_log_entry: None
     };
