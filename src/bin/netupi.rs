@@ -394,7 +394,7 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     time_column.add_child(
         Flex::row()
-        .with_child(Label::new("Today:\nWeek:\nMonth:\nYear:\nAll time:"))
+        .with_child(Label::new("Today\nWeek\nMonth\nYear\nAll time"))
         .with_default_spacer()
         .with_child(
             Label::new(|model: &AppModel, _env: &_| {
@@ -420,6 +420,11 @@ fn ui_builder() -> impl Widget<AppModel> {
                 return result;
         }))
         .padding(10.0)
+        .background(
+            Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
+                let bounds = ctx.size().to_rect();
+                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+            }))
         .lens(lens::Identity.map(
                     |m: &AppModel| m.clone(),
                     |_data: &mut AppModel, _m: AppModel| {},

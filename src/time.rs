@@ -10,19 +10,19 @@ pub fn format_duration(dur: &chrono::Duration) -> String {
     } else {empty += 1; "".to_string()};
 
     let hours = if dur.num_hours() > 0 {
-        format!(" {}h", dur.num_hours() % 24)
+        format!("{}{}h", if empty == 1 {""} else {" "},dur.num_hours() % 24)
     } else {empty += 1;"".to_string()};
 
     let mins = if dur.num_minutes() > 0 {
-        format!(" {}m", dur.num_minutes() % 60)
+        format!("{}{}m", if empty == 2 {""} else {" "},dur.num_minutes() % 60)
     } else {empty += 1;"".to_string()};
 
     let seconds = if dur.num_seconds() > 0 && dur.num_seconds() % 60 != 0 {
-        format!(" {}s", dur.num_seconds() % 60)
+        format!("{}{}s", if empty == 3 {""} else {" "},dur.num_seconds() % 60)
     } else {empty += 1; "".to_string()};
 
     if empty == 4 {
-        " 0s".to_string()
+        "--".to_string()
     } else {
         format!("{}{}{}{}", days, hours, mins, seconds)
     }

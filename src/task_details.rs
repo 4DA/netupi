@@ -33,7 +33,8 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
     column.add_default_spacer();
     column.add_child(
         Flex::row()
-        .with_child(Label::new("Today\nWeek\nMonth\nYear\nTotal"))
+        .with_child(Label::new("Today\nWeek\nMonth\nYear\nAll time"))
+        .with_default_spacer()
         .with_child(
             Label::new(|(_, sum): &(Task, TimePrefixSum), _env: &_| {
                 let mut result = String::new();
