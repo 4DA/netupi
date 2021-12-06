@@ -51,8 +51,8 @@ impl Add for AggregateDuration {
     fn add(self, other: Self) -> Self {
         Self {day: self.day + other.day,
               week: self.week + other.week,
-              month: self.week + other.week,
-              year: self.week + other.week,
+              month: self.month + other.month,
+              year: self.year + other.year,
               total: self.total + other.total,
         }
     }
