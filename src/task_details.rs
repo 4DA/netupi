@@ -4,7 +4,7 @@ use chrono::prelude::*;
 
 use druid::im::{Vector, OrdSet};
 use druid::lens::{self, LensExt};
-use druid::widget::{CrossAxisAlignment, Flex, Container, Label, List, Scroll, Controller, Painter, Radio};
+use druid::widget::{CrossAxisAlignment, Flex, Split, Label, List, Scroll, Controller, Painter, Radio};
 
 use druid::{
     Data, PaintCtx, RenderContext, Env, Event, EventCtx,
@@ -87,9 +87,7 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
 
     column.add_default_spacer();
     column.add_child(
-        Flex::row()
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .with_child(
+        Split::columns(
                 Flex::column()
                     .with_child(Label::new("Total time").with_font(FONT_CAPTION_DESCR.clone()))
                     .with_default_spacer()
@@ -103,11 +101,8 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
                             Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
                                 let bounds = ctx.size().to_rect();
                                 ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                            }))))
-
-            .with_spacer(50.0)
-            
-            .with_child(
+                            })))
+                ,
                 Flex::column()
                     .with_child(Label::new("Retrospective").with_font(FONT_CAPTION_DESCR.clone()))
                     .with_default_spacer()
@@ -120,14 +115,8 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
                                 Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
                                     let bounds = ctx.size().to_rect();
                                     ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                                }))))
-    );
-
-    column.add_spacer(15.0);
-    column.add_child(
-        Flex::row()
-
-    );
+                                })))
+    ));
 
     return column.controller(TaskDetailsController);
 }
