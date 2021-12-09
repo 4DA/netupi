@@ -58,25 +58,33 @@ impl Add for AggregateDuration {
     }
 }
 
-pub fn get_duration(sum: &TimePrefixSum, now: &DateTime<Local>) -> AggregateDuration {
+pub fn daystart(src: DateTime<Local>) -> DateTime<Utc>
+{
+    DateTime::<Utc>::from(src.with_hour(0).unwrap()
+              .with_minute(0).unwrap()
+              .with_second(0).unwrap())
+}
+
+pub fn get_duration(sum: &TimePrefixSum, now: &DateTime<Local>) -> AggregateDuration
+{
     let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
     let epoch = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
 
-    let day = get_total_time(sum, &day_start);
+    let day = get_total_time(sum, &day_start, &Utc::now());
 
-    let total = get_total_time(sum, &epoch);
+    let total = get_total_time(sum, &epoch, &Utc::now());
 
     let week = get_total_time(sum,
         &Local.isoywd(now.year(), now.iso_week().week(), Weekday::Mon)
-        .and_hms(0, 0, 0).with_timezone(&Utc));
+        .and_hms(0, 0, 0).with_timezone(&Utc), &Utc::now());
 
     let month = get_total_time(sum,
         &Local.ymd(now.year(), now.month(), 1)
-                .and_hms(0, 0, 0).with_timezone(&Utc));
+                .and_hms(0, 0, 0).with_timezone(&Utc), &Utc::now());
 
     let year = get_total_time(sum,
         &Local.ymd(now.year(), 1, 1)
-            .and_hms(0, 0, 0).with_timezone(&Utc));
+            .and_hms(0, 0, 0).with_timezone(&Utc), &Utc::now());
 
     return AggregateDuration{day, week, month, year, total};
 
