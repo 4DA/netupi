@@ -4,7 +4,7 @@ use chrono::prelude::*;
 
 use druid::im::{Vector, OrdSet};
 use druid::lens::{self, LensExt};
-use druid::widget::{CrossAxisAlignment, Flex, Label, List, Scroll, Controller, Painter, Radio};
+use druid::widget::{CrossAxisAlignment, Flex, Container, Label, List, Scroll, Controller, Painter, Radio};
 
 use druid::{
     Data, PaintCtx, RenderContext, Env, Event, EventCtx,
@@ -29,40 +29,104 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
 
     column.add_spacer(15.0);
 
-    column.add_child(Label::new("Task time log").with_font(FONT_CAPTION_DESCR.clone()));
+
+    let aggregate_label =
+        Label::new(|(_, sum): &(Task, TimePrefixSum), _env: &_| {
+            let mut result = String::new();
+
+            let duration = time::get_duration(sum, &Local::now());
+
+            result.push_str(&time::format_duration(&duration.day));
+            result.push_str("\n");
+
+            result.push_str(&time::format_duration(&duration.week));
+            result.push_str("\n");
+
+            result.push_str(&time::format_duration(&duration.month));
+            result.push_str("\n");
+
+            result.push_str(&time::format_duration(&duration.year));
+            result.push_str("\n");
+
+            result.push_str(&time::format_duration(&duration.total));
+
+            return result;
+        });
+
+    let days_label =
+        Label::new(|(_, _): &(Task, TimePrefixSum), _env: &_| {
+            let mut result = String::new();
+            let now = time::daystart(Local::now());
+            
+            for i in 0..7 {
+                let date = now.checked_sub_signed(Duration::days(i)).unwrap();
+                result.push_str(&date.naive_local().weekday().to_string());
+                if i != 6 {result.push_str("\n");}
+            }
+            
+            return result;
+        });
+
+
+    let days_duration_label =
+        Label::new(|(_, sum): &(Task, TimePrefixSum), _env: &_| {
+            let mut result = String::new();
+            let now = time::daystart(Local::now());
+            
+            for i in 0..7 {
+                let date = now.checked_sub_signed(Duration::days(i)).unwrap();
+                let prev_date = now.checked_sub_signed(Duration::days(i+1)).unwrap();
+                let duration = get_total_time(sum, &prev_date, &date);
+                result.push_str(&time::format_duration(&duration));
+                if i != 6 {result.push_str("\n");}
+            }
+            
+            return result;
+        });
+
+
     column.add_default_spacer();
     column.add_child(
         Flex::row()
-        .with_child(Label::new("Today\nWeek\nMonth\nYear\nAll time"))
-        .with_default_spacer()
-        .with_child(
-            Label::new(|(_, sum): &(Task, TimePrefixSum), _env: &_| {
-                let mut result = String::new();
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .with_child(
+                Flex::column()
+                    .with_child(Label::new("Total time").with_font(FONT_CAPTION_DESCR.clone()))
+                    .with_default_spacer()
+                .with_child(
+                    Flex::row()
+                        .with_child(Label::new("Today\nWeek\nMonth\nYear\nAll time"))
+                        .with_default_spacer()
+                        .with_child(aggregate_label)
+                        .padding(10.0)
+                        .background(
+                            Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
+                                let bounds = ctx.size().to_rect();
+                                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                            }))))
 
-                let duration = time::get_duration(sum, &Local::now());
+            .with_spacer(50.0)
+            
+            .with_child(
+                Flex::column()
+                    .with_child(Label::new("Retrospective").with_font(FONT_CAPTION_DESCR.clone()))
+                    .with_default_spacer()
+                    .with_child(
+                        Flex::row().with_child(days_label)
+                            .with_default_spacer()
+                            .with_child(days_duration_label)
+                            .padding(10.0)
+                            .background(
+                                Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
+                                    let bounds = ctx.size().to_rect();
+                                    ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                                }))))
+    );
 
-                result.push_str(&time::format_duration(&duration.day));
-                result.push_str("\n");
+    column.add_spacer(15.0);
+    column.add_child(
+        Flex::row()
 
-                result.push_str(&time::format_duration(&duration.week));
-                result.push_str("\n");
-
-                result.push_str(&time::format_duration(&duration.month));
-                result.push_str("\n");
-
-                result.push_str(&time::format_duration(&duration.year));
-                result.push_str("\n");
-
-                result.push_str(&time::format_duration(&duration.total));
-
-                return result;
-            }))
-            .padding(10.0)
-            .background(
-                Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
-                    let bounds = ctx.size().to_rect();
-                    ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                }))
     );
 
     return column.controller(TaskDetailsController);
