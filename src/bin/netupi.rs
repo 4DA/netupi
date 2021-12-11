@@ -27,6 +27,7 @@ use netupi::task_details::*;
 use netupi::activity_log::*;
 use netupi::common::*;
 use netupi::time;
+use netupi::widgets;
 
 pub fn main() -> anyhow::Result<()> {
     let _args: Vec<String> = env::args().collect();
@@ -391,42 +392,10 @@ fn ui_builder() -> impl Widget<AppModel> {
                           .padding(10.0));
 
     time_column.add_child(
-        Flex::row()
-        .with_child(Label::new("Today\nWeek\nMonth\nYear\nAll time")
-                    .with_font(FONT_LOG_DESCR.clone()))
-        .with_default_spacer()
-        .with_child(
-            Label::new(|model: &AppModel, _env: &_| {
-
-                let mut result = String::new();
-
-                let duration = time::get_durations(&model.task_sums);
-
-                result.push_str(&time::format_duration(&duration.day));
-                result.push_str("\n");
-
-                result.push_str(&time::format_duration(&duration.week));
-                result.push_str("\n");
-
-                result.push_str(&time::format_duration(&duration.month));
-                result.push_str("\n");
-
-                result.push_str(&time::format_duration(&duration.year));
-                result.push_str("\n");
-
-                result.push_str(&time::format_duration(&duration.total));
-
-                return result;
-        }).with_font(FONT_LOG_DESCR.clone()))
-        .padding(5.0)
-        .background(
-            Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
-                let bounds = ctx.size().to_rect();
-                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-            }))
-        .lens(lens::Identity.map(
-                    |m: &AppModel| m.clone(),
-                    |_data: &mut AppModel, _m: AppModel| {},
+        widgets::duration_widget()
+            .lens(lens::Identity.map(
+                |model: &AppModel| Rc::new(time::get_durations(&model.task_sums)),
+                |_, _ | {},
         )));
 
     time_column.add_default_spacer();

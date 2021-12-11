@@ -137,9 +137,9 @@ impl ActivityLogWidget {
 
                         // remove deleted time records from db
                         for (_k, d) in &diff {
-                                if let Err(what) = db::remove_time_record(inner.0.db.clone(), d) {
-                                    println!("db error: {}", what);
-                                }
+                            if let Err(what) = db::remove_time_record(inner.0.db.clone(), d) {
+                                println!("db error: {}", what);
+                            }
                         }
 
                         outer.task_sums = sums;

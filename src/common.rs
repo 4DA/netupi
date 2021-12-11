@@ -35,4 +35,3 @@ pub static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg")
 pub static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
 #[cfg(target_os = "windows")]
 pub const SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
-

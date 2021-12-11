@@ -15,6 +15,7 @@ use crate::editable_label::EditableLabel;
 use crate::task::*;
 use crate::common::*;
 use crate::time;
+use crate::widgets;
 
 pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
     let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
@@ -22,29 +23,6 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
     column.add_child(edit_widget);
 
     column.add_spacer(15.0);
-
-    let aggregate_label =
-        Label::new(|(_, sum): &(Task, TimePrefixSum), _env: &_| {
-            let mut result = String::new();
-
-            let duration = time::get_duration(sum, &Local::now());
-
-            result.push_str(&time::format_duration(&duration.day));
-            result.push_str("\n");
-
-            result.push_str(&time::format_duration(&duration.week));
-            result.push_str("\n");
-
-            result.push_str(&time::format_duration(&duration.month));
-            result.push_str("\n");
-
-            result.push_str(&time::format_duration(&duration.year));
-            result.push_str("\n");
-
-            result.push_str(&time::format_duration(&duration.total));
-
-            return result;
-        });
 
     let days_label =
         Label::new(|(_, _): &(Task, TimePrefixSum), _env: &_| {
@@ -84,18 +62,11 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
                 Flex::column()
                     .with_child(Label::new("Total time").with_font(FONT_CAPTION_DESCR.clone()))
                     .with_default_spacer()
-                .with_child(
-                    Flex::row()
-                        .with_child(Label::new("Today\nWeek\nMonth\nYear\nAll time")
-                                    .with_font(FONT_LOG_DESCR.clone()))
-                        .with_default_spacer()
-                        .with_child(aggregate_label.with_font(FONT_LOG_DESCR.clone()))
-                        .padding(10.0)
-                        .background(
-                            Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
-                                let bounds = ctx.size().to_rect();
-                                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                            })))
+                .with_child(widgets::duration_widget()
+                            .lens(lens::Map::new(
+                                |(_task, sum): &(Task, TimePrefixSum)|
+                                Rc::new(time::get_duration(sum, &Local::now())),
+                                |_, _| {})))
                 ,
                 Flex::column()
                     .with_child(Label::new("Retrospective").with_font(FONT_CAPTION_DESCR.clone()))

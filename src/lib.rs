@@ -9,4 +9,4 @@ pub mod activity_log;
 pub mod common;
 pub mod utils;
 pub mod time;
-
+pub mod widgets;
