@@ -77,7 +77,7 @@ impl ActivityLogWidget {
                     List::new(||{
                         Label::new(|(model, record): &TimeRecordCtx, _env: &_| {
                             if let Some(task) = model.tasks.get(&record.uid) {
-                                let mut name =  format!("{:wid$}", task.name, wid = 11);
+                                let name =  format!("{:wid$}", task.name, wid = 11);
 
                                 let duration = time::format_duration(
                                     &record.to.signed_duration_since(*record.from));

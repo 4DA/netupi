@@ -70,7 +70,7 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
                 let date = now.checked_sub_signed(Duration::days(i)).unwrap();
                 let prev_date = now.checked_sub_signed(Duration::days(i+1)).unwrap();
                 let duration = get_total_time(sum, &prev_date, &date);
-                result.push_str(&time::format_duration(&duration));
+                result.push_str(&format!("{:>8}", &time::format_duration(&duration)));
                 if i != 6 {result.push_str("\n");}
             }
             
