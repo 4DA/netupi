@@ -12,8 +12,7 @@ use druid::widget::{CrossAxisAlignment, Flex, Label, SizedBox, List, Scroll, Con
 
 use druid::{
     AppLauncher, Application, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
-    LifeCycle,
-    FontWeight, FontDescriptor, FontFamily, Point,
+    LifeCycle, Point,
     Menu, MenuItem, TimerToken, KeyOrValue,
     LocalizedString, UnitPoint, Widget, WidgetPod, WidgetExt, WindowDesc, WindowId};
 
@@ -211,10 +210,6 @@ fn ui_builder() -> impl Widget<AppModel> {
     let mut tasks_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
     let mut focus_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
-    static FONT_CAPTION_DESCR: FontDescriptor = FontDescriptor::new(FontFamily::SYSTEM_UI)
-    .with_weight(FontWeight::BOLD)
-    .with_size(18.0);
-
     focus_column.add_child(Label::new("Focus")
                            .with_font(FONT_CAPTION_DESCR.clone()));
 
@@ -397,7 +392,8 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     time_column.add_child(
         Flex::row()
-        .with_child(Label::new("Today\nWeek\nMonth\nYear\nAll time"))
+        .with_child(Label::new("Today\nWeek\nMonth\nYear\nAll time")
+                    .with_font(FONT_LOG_DESCR.clone()))
         .with_default_spacer()
         .with_child(
             Label::new(|model: &AppModel, _env: &_| {
@@ -421,8 +417,8 @@ fn ui_builder() -> impl Widget<AppModel> {
                 result.push_str(&time::format_duration(&duration.total));
 
                 return result;
-        }))
-        .padding(10.0)
+        }).with_font(FONT_LOG_DESCR.clone()))
+        .padding(5.0)
         .background(
             Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
                 let bounds = ctx.size().to_rect();

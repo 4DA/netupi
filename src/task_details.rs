@@ -8,7 +8,6 @@ use druid::widget::{CrossAxisAlignment, Flex, Split, Label, List, Scroll, Contro
 
 use druid::{
     Data, PaintCtx, RenderContext, Env, Event, EventCtx,
-    FontWeight, FontDescriptor, FontFamily,
     UnitPoint, Widget, WidgetExt, Target, TextAlignment, Command};
 
 use crate::editable_label;
@@ -18,17 +17,11 @@ use crate::common::*;
 use crate::time;
 
 pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
-    static FONT_CAPTION_DESCR: FontDescriptor =
-        FontDescriptor::new(FontFamily::SYSTEM_UI)
-        .with_weight(FontWeight::BOLD)
-        .with_size(16.0);
-
     let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
     let edit_widget = task_edit_widget().lens(druid::lens!((Task, TimePrefixSum), 0));
     column.add_child(edit_widget);
 
     column.add_spacer(15.0);
-
 
     let aggregate_label =
         Label::new(|(_, sum): &(Task, TimePrefixSum), _env: &_| {
@@ -93,9 +86,10 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
                     .with_default_spacer()
                 .with_child(
                     Flex::row()
-                        .with_child(Label::new("Today\nWeek\nMonth\nYear\nAll time"))
+                        .with_child(Label::new("Today\nWeek\nMonth\nYear\nAll time")
+                                    .with_font(FONT_LOG_DESCR.clone()))
                         .with_default_spacer()
-                        .with_child(aggregate_label)
+                        .with_child(aggregate_label.with_font(FONT_LOG_DESCR.clone()))
                         .padding(10.0)
                         .background(
                             Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
@@ -107,9 +101,9 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
                     .with_child(Label::new("Retrospective").with_font(FONT_CAPTION_DESCR.clone()))
                     .with_default_spacer()
                     .with_child(
-                        Flex::row().with_child(days_label)
+                        Flex::row().with_child(days_label.with_font(FONT_LOG_DESCR.clone()))
                             .with_default_spacer()
-                            .with_child(days_duration_label)
+                            .with_child(days_duration_label.with_font(FONT_LOG_DESCR.clone()))
                             .padding(10.0)
                             .background(
                                 Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
@@ -122,11 +116,6 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
 }
 
 fn task_edit_widget() -> impl Widget<Task> {
-    static FONT_CAPTION_DESCR: FontDescriptor =
-        FontDescriptor::new(FontFamily::SYSTEM_UI)
-        .with_weight(FontWeight::BOLD)
-        .with_size(16.0);
-
     let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
     column.add_child(

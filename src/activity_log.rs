@@ -9,7 +9,7 @@ use druid::widget::{CrossAxisAlignment, Controller, Flex, Label, List, Container
 
 use druid::{
     Data, PaintCtx, RenderContext, Env, Event, EventCtx,
-    LifeCycle, FontDescriptor, FontFamily, Point, Widget, WidgetPod, WidgetExt};
+    LifeCycle, Point, Widget, WidgetPod, WidgetExt};
 
 use druid::{Selector, Cursor, Color};
 
@@ -19,6 +19,7 @@ use crate::task::*;
 use crate::app_model::*;
 use crate::time;
 use crate::db;
+use crate::common::*;
 
 type TimeRecordCtx = (AppModel, TimeRecord);
 
@@ -70,8 +71,6 @@ pub struct ActivityLogWidget {
 impl ActivityLogWidget {
     pub fn new() -> ActivityLogWidget
     {
-        static FONT_LOG_DESCR: FontDescriptor = FontDescriptor::new(FontFamily::MONOSPACE);
-
         let flex = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start)
 
             .with_child(
