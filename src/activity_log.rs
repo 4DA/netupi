@@ -87,9 +87,9 @@ impl ActivityLogWidget {
                                 let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
 
                                 let time = if now.year() > when.year() {
-                                    when.format("%-d %b %y, %H:%M").to_string()
+                                    when.format("%d %b, %y, %H:%M").to_string()
                                 } else if now.ordinal() > when.ordinal() {
-                                    when.format("%-d %b, %H:%M").to_string()
+                                    when.format("%d %b, %H:%M").to_string()
                                 } else {
                                     when.format("%H:%M").to_string()
                                 };
