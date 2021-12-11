@@ -3,28 +3,50 @@ use chrono::Duration;
 use chrono::prelude::*;
 use crate::task::*;
 
+pub struct FormatOpts {
+    optimize_secs: bool, // don't show seconds when duration > 1min
+}
+
+impl FormatOpts {
+    pub fn default() -> Self {
+        FormatOpts {optimize_secs: true}
+    }
+}
+
 pub fn format_duration(dur: &chrono::Duration) -> String {
-    let mut empty = 0;
+    let mut dhms: [i64; 4] = [0, 0, 0, 0];
+    let opts = FormatOpts::default();
+
+    dhms[0] = dur.num_days() * 24 * 60 * 60;
+    dhms[1] = dhms[0] + dur.num_hours() * 60 * 60;
+    dhms[2] = dhms[1] + dur.num_minutes() * 60;
+    dhms[3] = dhms[2] + dur.num_seconds();
+
+    let skip_secs = opts.optimize_secs && dhms[2] >= 60;
+
     let days = if dur.num_days() > 0 {
         format!("{}d", dur.num_days())
-    } else {empty += 1; "".to_string()};
+    } else {"".to_string()};
 
     let hours = if dur.num_hours() > 0 {
-        format!("{}{}h", if empty == 1 {""} else {" "},dur.num_hours() % 24)
-    } else {empty += 1;"".to_string()};
+        format!("{}{:wid$}h", if dhms[0] == 0 {""} else {" "}, dur.num_hours() % 24, 
+                wid = if dhms[0] == 0 {1} else {2})
+    } else {"".to_string()};
 
     let mins = if dur.num_minutes() > 0 {
-        format!("{}{}m", if empty == 2 {""} else {" "},dur.num_minutes() % 60)
-    } else {empty += 1;"".to_string()};
+        format!("{}{:wid$}m", if dhms[1] == 0 {""} else {" "},dur.num_minutes() % 60,
+                wid = if dhms[1] == 0 {1} else {2})
+    } else {"".to_string()};
 
     let seconds = if dur.num_seconds() > 0 && dur.num_seconds() % 60 != 0 {
-        format!("{}{}s", if empty == 3 {""} else {" "},dur.num_seconds() % 60)
-    } else {empty += 1; "".to_string()};
+        format!("{}{:wid$}s", if dhms[2] == 0  {""} else {" "},dur.num_seconds() % 60,
+                wid = if dhms[2] == 0 {1} else {2})
+    } else {"".to_string()};
 
-    if empty == 4 {
+    if dhms[3] == 0 {
         "--".to_string()
     } else {
-        format!("{}{}{}{}", days, hours, mins, seconds)
+        format!("{}{}{}{}", days, hours, mins, if skip_secs {"".to_string()} else {seconds})
     }
 }
 
