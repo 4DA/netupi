@@ -28,17 +28,17 @@ pub fn format_duration(dur: &chrono::Duration) -> String {
         format!("{}d", dur.num_days())
     } else {"".to_string()};
 
-    let hours = if dur.num_hours() > 0 {
+    let hours = if dur.num_hours() % 24 != 0 {
         format!("{}{:wid$}h", if dhms[0] == 0 {""} else {" "}, dur.num_hours() % 24, 
                 wid = if dhms[0] == 0 {1} else {2})
     } else {"".to_string()};
 
-    let mins = if dur.num_minutes() > 0 {
-        format!("{}{:wid$}m", if dhms[1] == 0 {""} else {" "},dur.num_minutes() % 60,
+    let mins = if dur.num_minutes() % 60 != 0 {
+        format!("{}{:wid$}m", if dhms[1] == 0 {""} else {" "}, dur.num_minutes() % 60,
                 wid = if dhms[1] == 0 {1} else {2})
     } else {"".to_string()};
 
-    let seconds = if dur.num_seconds() > 0 && dur.num_seconds() % 60 != 0 {
+    let seconds = if dur.num_seconds() % 60 != 0 {
         format!("{}{:wid$}s", if dhms[2] == 0  {""} else {" "},dur.num_seconds() % 60,
                 wid = if dhms[2] == 0 {1} else {2})
     } else {"".to_string()};
