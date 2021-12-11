@@ -43,6 +43,7 @@ pub struct AppModel {
     pub db: Rc<rusqlite::Connection>,
     pub tasks: TaskMap,
     pub records: TimeRecordMap,
+    pub records_killed: Rc<TimeRecordSet>,
     pub task_sums: TaskSums,
     pub tags: OrdSet<String>,
     pub tracking: TrackingCtx,

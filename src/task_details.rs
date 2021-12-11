@@ -81,7 +81,7 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
                                     let bounds = ctx.size().to_rect();
                                     ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
                                 })))
-    ));
+    ).bar_size(0.0));
 
     return column.controller(TaskDetailsController);
 }

@@ -5,7 +5,7 @@ use druid::widget::prelude::*;
 use druid::im::{Vector};
 use druid::lens::{self, LensExt};
 
-use druid::widget::{CrossAxisAlignment, Controller, Flex, Label, List, Container, Painter};
+use druid::widget::{CrossAxisAlignment, Controller, Flex, Label, List, Container, Painter, Scroll};
 
 use druid::{
     Data, PaintCtx, RenderContext, Env, Event, EventCtx,
@@ -21,7 +21,15 @@ use crate::time;
 use crate::db;
 use crate::common::*;
 
-type TimeRecordCtx = (AppModel, TimeRecord);
+
+#[derive(Clone, Data)]
+enum LogEdit {
+    None,
+    Killed(Rc<DateTime<Utc>>),
+    Restored(Rc<DateTime<Utc>>),
+}
+
+type TimeRecordCtx = ((AppModel, LogEdit), TimeRecord);
 
 struct LogEntryController;
 
@@ -30,6 +38,26 @@ pub static DELETING_TASK_BORDER: Color = Color::rgb8(204, 36, 29);
 impl LogEntryController {
     const CMD_HOT: Selector<Rc<DateTime<Utc>>> = Selector::new("alog_entry_hot");
     const CMD_COLD: Selector = Selector::new("alog_entry_cold");
+}
+
+fn format_time_record(task: &Task, record: &TimeRecord) -> String {
+    let name =  format!("{:wid$}", task.name, wid = 11);
+
+    let duration = time::format_duration(
+        &record.to.signed_duration_since(*record.from));
+
+    let now: DateTime<Local> = DateTime::from(SystemTime::now());
+    let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
+
+    let time = if now.year() > when.year() {
+        when.format("%d %b, %y, %H:%M").to_string()
+    } else if now.ordinal() > when.ordinal() {
+        when.format("%d %b, %H:%M").to_string()
+    } else {
+        when.format("%H:%M").to_string()
+    };
+
+    format!("{} {:<10} {:<10}", name, duration, time)
 }
 
 impl<W: Widget<TimeRecordCtx>> Controller<TimeRecordCtx, W> for LogEntryController {
@@ -74,26 +102,11 @@ impl ActivityLogWidget {
         let flex = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start)
 
             .with_child(
+                Scroll::new(                
                     List::new(||{
-                        Label::new(|(model, record): &TimeRecordCtx, _env: &_| {
+                        Label::new(|((model, _killed), record): &TimeRecordCtx, _env: &_| {
                             if let Some(task) = model.tasks.get(&record.uid) {
-                                let name =  format!("{:wid$}", task.name, wid = 11);
-
-                                let duration = time::format_duration(
-                                    &record.to.signed_duration_since(*record.from));
-
-                                let now: DateTime<Local> = DateTime::from(SystemTime::now());
-                                let when: DateTime<Local> = DateTime::<Local>::from(*record.from);
-
-                                let time = if now.year() > when.year() {
-                                    when.format("%d %b, %y, %H:%M").to_string()
-                                } else if now.ordinal() > when.ordinal() {
-                                    when.format("%d %b, %H:%M").to_string()
-                                } else {
-                                    when.format("%H:%M").to_string()
-                                };
-
-                                format!("{} {:<10} {:<10}", name, duration, time)
+                                format_time_record(&task, &record)
                             } else {
                                 "".to_string()
                             }
@@ -102,50 +115,75 @@ impl ActivityLogWidget {
 
                         .padding(6.0)
                         .controller(LogEntryController)
-                        .on_click(|_ctx, (data, what): &mut TimeRecordCtx, _env| {
-                            data.records.remove(&what.from);
+                        .on_click(|_ctx, ((data, action), what): &mut TimeRecordCtx, _env| {
+                            if data.records_killed.contains(&what.from) {
+                                *action = LogEdit::Restored(what.from.clone());
+                            } else {
+                                *action = LogEdit::Killed(what.from.clone());
+                            }
                         })
                         .background(
-                            Painter::new(|ctx: &mut PaintCtx, _data: &TimeRecordCtx, _env| {
+                            Painter::new(|ctx: &mut PaintCtx, ((model, _), record): &TimeRecordCtx, _env| {
                                 let bounds = ctx.size().to_rect();
 
+                                if model.records_killed.contains(&record.from) {
+                                    ctx.stroke(bounds, &DELETING_TASK_BORDER, 5.0);
+                                }
+                                
                                 if ctx.is_hot() {
                                     ctx.stroke(bounds, &DELETING_TASK_BORDER, 2.0);
                                 }
                             }))
-
-                    }))
+                    })
             .padding((0.0, 0.0, 15.0, 0.0))
             .lens(lens::Identity.map(
-                |m: &AppModel| (m.clone(),
+                |m: &AppModel| ((m.clone(),
+                                LogEdit::None),
                                 m.records.values().map(|v| v.clone()).rev().collect()),
 
-                |outer: &mut AppModel, inner: (AppModel, Vector<TimeRecord>)|
+                |outer: &mut AppModel, ((_inner, action), _) : ((AppModel, LogEdit), Vector<TimeRecord>)|
                 {
-                    if !outer.records.same(&inner.0.records) {
-                        let diff = outer.records.clone().difference(inner.0.records.clone());
-                        outer.records = inner.0.records;
-
-                        let mut sums = TaskSums::new();
-
-                        // TODO don't rebuild sums completely, touch only upper prefices
-                        for (uid, _) in &inner.0.tasks {
-                            let sum = build_time_prefix_sum(&inner.0.tasks, &outer.records,
-                                                            uid.clone());
-                            sums.insert(uid.clone(), sum);
-                        }
-
-                        // remove deleted time records from db
-                        for (_k, d) in &diff {
-                            if let Err(what) = db::remove_time_record(inner.0.db.clone(), d) {
-                                println!("db error: {}", what);
+                      match action {
+                        LogEdit::None => {},
+                        LogEdit::Killed(ref ts) => {
+                            if let Some(rec) = outer.records.get(&ts) {
+                                if let Err(what) = db::remove_time_record(outer.db.clone(), &rec) {
+                                    println!("db error: {}", what);                                
+                                }
                             }
-                        }
 
-                        outer.task_sums = sums;
+                            outer.records_killed = Rc::new(outer.records_killed.update(*ts.clone()));
+                            let mut sums = TaskSums::new();
+                            
+                            for (uid, _) in &outer.tasks {
+                                let sum = build_time_prefix_sum(&outer.tasks, &outer.records,
+                                                                uid.clone(), &outer.records_killed);
+                                sums.insert(uid.clone(), sum);
+                            }
+                            
+                            outer.task_sums = sums;
+                        },
+                        LogEdit::Restored(ref ts) => {
+                            if let Some(rec) = outer.records.get(&ts) {
+                                if let Err(what) = db::add_time_record(outer.db.clone(), &rec) {
+                                    println!("db error: {}", what);
+                                }
+                            }
+
+                            outer.records_killed = Rc::new(outer.records_killed.without(ts));                            
+                            let mut sums = TaskSums::new();
+                            
+                            for (uid, _) in &outer.tasks {
+                                let sum = build_time_prefix_sum(&outer.tasks, &outer.records,
+                                                                uid.clone(), &outer.records_killed);
+                                sums.insert(uid.clone(), sum);
+                            }
+                            
+                            outer.task_sums = sums;                            
+                        }
                     }
                 },
-            ));
+            ))));
 
         ActivityLogWidget {inner: WidgetPod::new(Container::new(flex)), hot: None}
     }

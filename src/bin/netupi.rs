@@ -43,7 +43,7 @@ pub fn main() -> anyhow::Result<()> {
     let mut task_sums = TaskSums::new();
 
     for (uid, _) in &tasks {
-        let sum = build_time_prefix_sum(&tasks, &records, uid.clone());
+        let sum = build_time_prefix_sum(&tasks, &records, uid.clone(), &TimeRecordSet::new());
         task_sums.insert(uid.clone(), sum);
     }
 
@@ -53,6 +53,7 @@ pub fn main() -> anyhow::Result<()> {
         db,
         tasks,
         records,
+        records_killed: Rc::new(TimeRecordSet::new()),
         task_sums,
         tags,
         tracking: TrackingCtx{state: TrackingState::Inactive,

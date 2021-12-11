@@ -17,6 +17,7 @@ use uuid::Uuid;
 pub type TagSet        = OrdSet<String>;
 pub type TaskMap       = OrdMap<String, Task>;
 pub type TimeRecordMap = OrdMap<DateTime<Utc>, TimeRecord>;
+pub type TimeRecordSet = OrdSet<DateTime<Utc>>;
 pub type TimePrefixSum = OrdMap<DateTime<Utc>, TimePrefix>;
 pub type TaskSums      = OrdMap::<String, TimePrefixSum>;
 
@@ -240,8 +241,8 @@ pub fn add_record_to_sum(sum_map: &mut TimePrefixSum, record: &TimeRecord) {
     sum_map.insert(*record.from, last);
 }
 
-pub fn build_time_prefix_sum(_tasks: &TaskMap, records: &TimeRecordMap, filter: String)
-                             -> TimePrefixSum
+pub fn build_time_prefix_sum(_tasks: &TaskMap, records: &TimeRecordMap, filter: String,
+                             killed: &TimeRecordSet) -> TimePrefixSum
 {
     let mut result = TimePrefixSum::new();
     let epoch_0 = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
@@ -249,7 +250,9 @@ pub fn build_time_prefix_sum(_tasks: &TaskMap, records: &TimeRecordMap, filter: 
 
     let mut psum = Duration::zero();
 
-    for (_k, v) in records {
+    for (k, v) in records {
+        if killed.contains(&k) {continue;}
+
         if filter.eq(&v.uid) {
             psum = psum + v.to.signed_duration_since(*v.from);
             result.insert(*v.from, TimePrefix::new(&psum));
