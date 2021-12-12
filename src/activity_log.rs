@@ -8,10 +8,10 @@ use druid::lens::{self, LensExt};
 use druid::widget::{CrossAxisAlignment, Controller, Flex, Label, List, Container, Painter, Scroll};
 
 use druid::{
-    Data, PaintCtx, RenderContext, Env, Event, EventCtx,
+    Data, PaintCtx, RenderContext, Env, Event, EventCtx, kurbo,
     LifeCycle, Point, Widget, WidgetPod, WidgetExt};
 
-use druid::{Selector, Cursor, Color};
+use druid::{Selector, Cursor};
 
 use chrono::prelude::*;
 
@@ -32,8 +32,6 @@ enum LogEdit {
 type TimeRecordCtx = ((AppModel, LogEdit), TimeRecord);
 
 struct LogEntryController;
-
-pub static DELETING_TASK_BORDER: Color = Color::rgb8(204, 36, 29);
 
 impl LogEntryController {
     const CMD_HOT: Selector<Rc<DateTime<Utc>>> = Selector::new("alog_entry_hot");
@@ -126,12 +124,14 @@ impl ActivityLogWidget {
                             Painter::new(|ctx: &mut PaintCtx, ((model, _), record): &TimeRecordCtx, _env| {
                                 let bounds = ctx.size().to_rect();
 
-                                if model.records_killed.contains(&record.from) {
-                                    ctx.stroke(bounds, &DELETING_TASK_BORDER, 5.0);
-                                }
+                                let line =kurbo::Line::new(Point::new(bounds.min_x(), bounds.center().y), 
+                                                           Point::new(bounds.max_x(), bounds.center().y));
                                 
-                                if ctx.is_hot() {
-                                    ctx.stroke(bounds, &DELETING_TASK_BORDER, 2.0);
+                                match (model.records_killed.contains(&record.from), ctx.is_hot()) {
+                                    (true, false) => ctx.stroke(line.clone(), &COLOR_ACTIVE, 2.0),
+                                    (true, true) => ctx.stroke(line.clone(), &RESTORED_TASK_BORDER, 2.0),
+                                    (false, true) => ctx.stroke(line.clone(), &DELETING_TASK_BORDER, 2.0),
+                                    _ => {},
                                 }
                             }))
                     })

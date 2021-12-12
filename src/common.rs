@@ -7,6 +7,10 @@ pub static TASK_ACTIVE_COLOR_BG: Color          = Color::rgb8(250, 189, 47);
 pub static TASK_REST_COLOR_BG: Color            = Color::rgb8(131, 162, 152);
 pub static TASK_PAUSE_COLOR_BG: Color           = Color::rgb8(211, 134, 155);
 pub static TASK_FOCUS_BORDER: Color             = Color::rgb8(124, 111, 100);
+pub static COLOR_ACTIVE: Color                  = Color::rgb8(255, 255, 255);
+pub static DELETING_TASK_BORDER: Color          = Color::rgb8(204, 36, 29);
+pub static RESTORED_TASK_BORDER: Color          = Color::rgb8(184, 187, 38);
+
 pub static UI_TIMER_INTERVAL: Duration = Duration::from_secs(1);
 
 pub static FONT_LOG_DESCR: FontDescriptor = FontDescriptor::new(FontFamily::MONOSPACE).with_size(14.0);
