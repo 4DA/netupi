@@ -5,11 +5,12 @@ use crate::task::*;
 
 pub struct FormatOpts {
     optimize_secs: bool, // don't show seconds when duration > 1min
+    show_days: bool, // show work days
 }
 
 impl FormatOpts {
     pub fn default() -> Self {
-        FormatOpts {optimize_secs: true}
+        FormatOpts {optimize_secs: true, show_days: false}
     }
 }
 
@@ -24,12 +25,13 @@ pub fn format_duration(dur: &chrono::Duration) -> String {
 
     let skip_secs = opts.optimize_secs && dhms[2] >= 60;
 
-    let days = if dur.num_days() > 0 {
+    let days = if opts.show_days && dur.num_days() > 0 {
         format!("{}d", dur.num_days())
     } else {"".to_string()};
 
     let hours = if dur.num_hours() % 24 != 0 {
-        format!("{}{:wid$}h", if dhms[0] == 0 {""} else {" "}, dur.num_hours() % 24, 
+        format!("{}{:wid$}h", if dhms[0] == 0 {""} else {" "}, 
+                if opts.show_days {dur.num_hours() % 24} else {dur.num_hours()}, 
                 wid = if dhms[0] == 0 {1} else {2})
     } else {"".to_string()};
 
