@@ -188,6 +188,8 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
 
             //TODO think of better implementation
             Event::KeyUp(key) if key.code == druid::Code::ArrowDown => {
+                if data.0.selected_task.is_empty() {return;}
+
                 let mut next = None;
                 let selected = data.0.tasks.get(&data.0.selected_task).unwrap();
 
@@ -204,6 +206,8 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             },
 
             Event::KeyUp(key) if key.code == druid::Code::ArrowUp => {
+                if data.0.selected_task.is_empty() {return;}
+
                 let mut next = None;
                 let selected = data.0.tasks.get(&data.0.selected_task).unwrap();
 
@@ -220,7 +224,10 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             },
 
             Event::KeyUp(key) if key.code == druid::Code::Space => {
+                if data.0.selected_task.is_empty() {return;}
+
                 let selected = data.0.selected_task.clone();
+
                 match data.0.tracking.state.clone() {
                     TrackingState::Inactive => start_tracking(&mut data.0, selected, ctx),
 
