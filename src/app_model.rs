@@ -50,7 +50,10 @@ pub struct AppModel {
     pub selected_task: String,
     pub focus_filter: FocusFilter,
     pub tag_filter: Option<String>,
-    pub hot_log_entry: Option<Rc<DateTime<Utc>>>
+    pub hot_log_entry: Option<Rc<DateTime<Utc>>>,
+
+    pub show_task_edit: bool,
+    pub show_task_summary: bool
 }
 
 pub fn get_work_interval(model: &AppModel, uid: &String) -> chrono::Duration {

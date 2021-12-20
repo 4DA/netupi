@@ -121,6 +121,8 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 data.0.tasks.insert(uid.clone(), task);
                 data.0.task_sums.insert(uid.clone(), TimePrefixSum::new());
                 data.0.update_tags();
+                data.0.show_task_edit = true;
+
                 ctx.submit_command(COMMAND_DETAILS_REQUEST_FOCUS.with(TASK_NAME_EDIT_WIDGET));
                 ctx.request_update();
             },

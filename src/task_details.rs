@@ -4,7 +4,7 @@ use chrono::prelude::*;
 
 use druid::im::{Vector, OrdSet};
 use druid::lens::{self, LensExt};
-use druid::widget::{CrossAxisAlignment, Flex, Split, Label, List, Scroll, Controller, Painter, Radio};
+use druid::widget::{Button, Either, CrossAxisAlignment, Flex, Split, Label, List, Scroll, Controller, Painter, Radio, SizedBox};
 
 use druid::{
     Data, PaintCtx, RenderContext, Env, Event, EventCtx,
@@ -17,12 +17,8 @@ use crate::common::*;
 use crate::time;
 use crate::widgets;
 
-pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
+pub fn task_summary_widget() -> impl Widget<((Task, TimePrefixSum), bool)> {
     let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
-    let edit_widget = task_edit_widget().lens(druid::lens!((Task, TimePrefixSum), 0));
-    column.add_child(edit_widget);
-
-    column.add_spacer(15.0);
 
     let days_label =
         Label::new(|(_, _): &(Task, TimePrefixSum), _env: &_| {
@@ -81,12 +77,16 @@ pub fn task_details_widget() -> impl Widget<(Task, TimePrefixSum)> {
                                     let bounds = ctx.size().to_rect();
                                     ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
                                 })))
-    ).bar_size(0.0));
+        ).bar_size(0.0));
 
-    return column.controller(TaskDetailsController);
+    Either::new(|((_,_), visible): &((Task, TimePrefixSum), bool), _env: &Env|
+                *visible == true,
+                column.controller(TaskDetailsController)
+                .lens(druid::lens!(((Task, TimePrefixSum), bool), 0)),
+                SizedBox::empty().expand_width())
 }
 
-fn task_edit_widget() -> impl Widget<Task> {
+pub fn task_edit_widget() -> impl Widget<(Task, bool)> {
     let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
     column.add_child(
@@ -245,7 +245,21 @@ fn task_edit_widget() -> impl Widget<Task> {
     //     1.0,
     // );
 
-    return column;
+    Flex::row()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+
+        .with_flex_child(
+            Either::new(|(_, visible): &(Task, bool), _env: &Env| *visible == true,
+                        column
+                        .lens(druid::lens!((Task, bool), 0)),
+                        SizedBox::empty().expand_width()),
+            1.0)
+
+        .with_child(Button::dynamic(move |data, _env| (if *data {"▲"} else {"Edit task ▼"}).to_string())
+                    .on_click(|_ctx, visible: &mut bool, _env| {
+                        *visible = !*visible;
+                    })
+                    .lens(druid::lens!((Task, bool), 1)))
 }
 
 struct TaskDetailsController;

@@ -63,7 +63,9 @@ pub fn main() -> anyhow::Result<()> {
         selected_task: selected_task,
         focus_filter: FocusFilter::All, // select filter of last tracked task
         tag_filter: None,
-        hot_log_entry: None
+        hot_log_entry: None,
+        show_task_edit: true,
+        show_task_summary: true,
     };
 
     let selected = data.get_uids_filtered().front().unwrap_or(&"".to_string()).clone();
@@ -325,21 +327,21 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     tasks_column.add_child(
         Maybe::new(
-            || task_details_widget().boxed(),
+            || task_edit_widget().boxed(),
             || SizedBox::empty().expand_width().boxed(),
         )
             .lens(lens::Identity.map(
                 // Expose shared data with children data
                 |d: &AppModel|
-                match (d.tasks.get(&d.selected_task).map_or(None, |r| Some(r.clone())),
-                       d.task_sums.get(&d.selected_task).map_or(TimePrefixSum::new(), |r| r.clone()))
+                match d.tasks.get(&d.selected_task)
                 {
-                    (Some(task), time) => Some((task, time)),
+                    Some(task) => Some((task.clone(), d.show_task_edit)),
                     _ => None,
                 },
 
-                |d: &mut AppModel, x: Option<(Task, TimePrefixSum)>| {
-                    if let Some((mut new_task, _)) = x {
+                |d: &mut AppModel, x: Option<(Task, bool)>| {
+                    if let Some((mut new_task, vis)) = x {
+                        d.show_task_edit = vis;
 
                         if let Some(prev) = d.tasks.get(&d.selected_task) {
                             if !prev.same(&new_task) {
@@ -375,6 +377,31 @@ fn ui_builder() -> impl Widget<AppModel> {
                                 d.check_update_selected();
                             }
                         }
+                    }
+                },
+            )),
+    );
+
+    tasks_column.add_spacer(15.0);
+
+    tasks_column.add_child(
+        Maybe::new(
+            || task_summary_widget().boxed(),
+            || SizedBox::empty().expand_width().boxed(),
+        )
+            .lens(lens::Identity.map(
+                // Expose shared data with children data
+                |d: &AppModel|
+                match (d.tasks.get(&d.selected_task).map_or(None, |r| Some(r.clone())),
+                       d.task_sums.get(&d.selected_task).map_or(TimePrefixSum::new(), |r| r.clone()))
+                {
+                    (Some(task), time) => Some(((task, time), d.show_task_summary)),
+                    _ => None,
+                },
+
+                |d: &mut AppModel, x: Option<((Task, TimePrefixSum), bool)>| {
+                    if let Some(((_, _), vis)) = x {
+                        d.show_task_summary = vis;
                     }
                 },
             )),
