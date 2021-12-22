@@ -28,8 +28,9 @@ pub fn format_duration(dur: &chrono::Duration) -> String {
     let days = if opts.show_days && dur.num_days() > 0 {
         format!("{}d", dur.num_days())
     } else {"".to_string()};
-
-    let hours = if dur.num_hours() % 24 != 0 {
+    let hours = if opts.show_days && dur.num_hours() % 24 != 0 ||
+        !opts.show_days && dur.num_hours() > 0
+    {
         format!("{}{:wid$}h", if dhms[0] == 0 {""} else {" "}, 
                 if opts.show_days {dur.num_hours() % 24} else {dur.num_hours()}, 
                 wid = if dhms[0] == 0 {1} else {2})
