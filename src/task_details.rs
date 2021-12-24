@@ -6,7 +6,9 @@ use druid::im::{Vector, OrdSet};
 use druid::lens::{self, LensExt};
 use druid::widget::{Button, Either, CrossAxisAlignment, Flex, Split, Label, List, Scroll, Controller, Painter, Radio, SizedBox};
 
-use druid::{
+use druid::kurbo::{Circle, Rect};
+
+use druid::{Color, Cursor, Point, LinearGradient,
     Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     UnitPoint, Widget, WidgetExt, Target, TextAlignment, Command};
 
@@ -231,6 +233,25 @@ pub fn task_edit_widget() -> impl Widget<(Task, bool)> {
             .with_child(Label::new("min").with_font(FONT_CAPTION_DESCR.clone()))
     );
 
+    column.add_spacer(15.0);
+
+    column.add_child(
+        Flex::row()
+        .with_child(Label::new("Color").with_font(FONT_CAPTION_DESCR.clone()))
+        .with_default_spacer()
+        .with_flex_child(
+            SizedBox::new(Painter::new(|ctx, _data: &_, _env| {
+                let bounds = ctx.size().to_rect();
+                let gradient = LinearGradient::new(
+                    UnitPoint::LEFT,
+                    UnitPoint::RIGHT,
+                    (Color::RED, Color::YELLOW, Color::GREEN, Color::BLUE, Color::NAVY, Color::PURPLE)
+                );
+                ctx.fill(bounds, &gradient);
+            })).expand_width().height(25.0).controller(ColorPickerController)
+                , 1.0)
+    );
+
 
     // DropdownSelect from widget nursery creates separated window
     // column.add_flex_child(
@@ -283,5 +304,20 @@ impl<T, W: Widget<T>> Controller<T, W> for TaskDetailsController {
             }
             _ => child.event(ctx, event, data, env),
         }
+    }
+}
+
+struct ColorPickerController;
+
+impl<T, W: Widget<T>> Controller<T, W> for ColorPickerController {
+    fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
+
+        match event {
+            Event::MouseDown(ref mouse) => println!("mouse coords: {:?} | layout: {:?}",
+                                                    mouse.pos, ctx.size()),
+            _ => child.event(ctx, event, data, env),
+        }
+
+        ctx.set_cursor(&Cursor::Crosshair);
     }
 }
