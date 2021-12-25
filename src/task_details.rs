@@ -2,6 +2,8 @@ use std::rc::Rc;
 use chrono::Duration;
 use chrono::prelude::*;
 
+use lerp::Lerp;
+
 use druid::im::{Vector, OrdSet};
 use druid::lens::{self, LensExt};
 use druid::widget::{Button, Either, CrossAxisAlignment, Flex, Split, Label, List, Scroll, Controller, Painter, Radio, SizedBox};
@@ -18,6 +20,10 @@ use crate::task::*;
 use crate::common::*;
 use crate::time;
 use crate::widgets;
+
+const COLORS_COUNT: usize = 6;
+const GRADIENT_COLORS: [Color; COLORS_COUNT] =
+    [Color::RED, Color::YELLOW, Color::GREEN, Color::BLUE, Color::NAVY, Color::PURPLE];
 
 pub fn task_summary_widget() -> impl Widget<((Task, TimePrefixSum), bool)> {
     let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
@@ -245,7 +251,7 @@ pub fn task_edit_widget() -> impl Widget<(Task, bool)> {
                 let gradient = LinearGradient::new(
                     UnitPoint::LEFT,
                     UnitPoint::RIGHT,
-                    (Color::RED, Color::YELLOW, Color::GREEN, Color::BLUE, Color::NAVY, Color::PURPLE)
+                    &GRADIENT_COLORS[0..],
                 );
                 ctx.fill(bounds, &gradient);
             })).expand_width().height(25.0).controller(ColorPickerController)
@@ -309,12 +315,37 @@ impl<T, W: Widget<T>> Controller<T, W> for TaskDetailsController {
 
 struct ColorPickerController;
 
+fn lerp(a: &druid::Color, b: &druid::Color, t: f64) -> druid::Color {
+    match (a.as_rgba(), b.as_rgba()) {
+        ((r1, g1, b1, a1), (r2, g2, b2, a2)) => {
+            druid::Color::rgba(
+                lerp::Lerp::lerp(r1, r2, t),
+                lerp::Lerp::lerp(g1, g2, t),
+                lerp::Lerp::lerp(b1, b2, t),
+                lerp::Lerp::lerp(a1, a2, t))
+        }
+    }
+}
+
 impl<T, W: Widget<T>> Controller<T, W> for ColorPickerController {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
 
         match event {
-            Event::MouseDown(ref mouse) => println!("mouse coords: {:?} | layout: {:?}",
-                                                    mouse.pos, ctx.size()),
+            Event::MouseUp(ref mouse) => {
+                println!("mouse coords: {:?} | layout: {:?}", mouse.pos, ctx.size());
+
+                let idx_f = (COLORS_COUNT-1) as f64 * mouse.pos.x / ctx.size().width;
+                println!("idx_f: {:?}", idx_f);
+
+                let left_idx = idx_f.floor().round() as usize;
+                let right_idx = idx_f.ceil().round() as usize;
+
+                let result = lerp(&GRADIENT_COLORS[left_idx], &GRADIENT_COLORS[right_idx],
+                                  idx_f - left_idx as f64);
+
+                println!("result: {:?}", result);
+
+            }
             _ => child.event(ctx, event, data, env),
         }
 
