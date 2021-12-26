@@ -3,7 +3,7 @@ use std::ops::Add;
 use std::rc::Rc;
 use std::time::SystemTime;
 
-use druid::{Data, Lens};
+use druid::{Data, Lens, Color};
 use chrono::prelude::*;
 use chrono::Duration;
 use druid::im::{OrdSet, OrdMap};
@@ -83,7 +83,7 @@ pub struct Task {
     pub task_status: TaskStatus,
     pub work_duration: Rc<Duration>,
     pub break_duration: Rc<Duration>,
-    pub color: u32,
+    pub color: druid::Color,
 }
 
 #[derive(Debug, Clone, Data)]
@@ -136,7 +136,7 @@ impl Task {
         return Task{name, description, uid, tags, priority, task_status,
                     work_duration: Rc::new(work_duration),
                     break_duration: Rc::new(break_duration),
-                    seq, color: 0};
+                    seq, color: Color::BLACK};
     }
 
     pub fn new_simple(name: String) -> Task {

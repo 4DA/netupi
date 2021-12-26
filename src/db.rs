@@ -99,7 +99,7 @@ pub fn add_task(conn: Rc<Connection>, task: &Task) -> anyhow::Result<()> {
                 &task.priority.to_string(), &serde_json::to_string(&task.task_status).unwrap(),
                 &DurationWrapper(*task.work_duration),
                 &DurationWrapper(*task.break_duration),
-                task.color,
+                task.color.as_rgba_u32(),
                 &task.seq.to_string(),
         ],
     )?;
@@ -116,7 +116,7 @@ pub fn update_task(conn: Rc<Connection>, task: &Task) -> anyhow::Result<()> {
                 &serde_json::to_string(&Wrapper::new(&task.tags)).unwrap(),
                 &task.priority.to_string(), &serde_json::to_string(&task.task_status).unwrap(),
                 &DurationWrapper(*task.work_duration), &DurationWrapper(*task.break_duration),
-                &task.seq.to_string(), task.color, &task.uid],
+                &task.seq.to_string(), task.color.as_rgba_u32(), &task.uid],
     )?;
 
     println!("update ok | t: {:?}", &task);
@@ -165,7 +165,8 @@ pub fn get_tasks(conn: Rc<Connection>) -> anyhow::Result<(TaskMap, TagSet)>
                              .unwrap_or(TaskStatus::NeedsAction),
             work_duration  : Rc::new(work_duration.0),
             break_duration : Rc::new(rest_duration.0),
-            color          : row.get::<usize, u32>(9)?,
+            color          : druid::Color::from_rgba32_u32(row.get::<usize, u32>(9)?)
+                             .with_alpha(1.0),
         })
     })?;
 
