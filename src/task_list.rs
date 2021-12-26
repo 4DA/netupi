@@ -5,7 +5,9 @@ use std::io::BufReader;
 use druid::im::{Vector};
 use druid::widget::prelude::*;
 
-use druid::widget::{Label, List, Controller, ControllerHost, Container, Painter, Scroll};
+use druid::widget::{Flex, Label, List, Controller, ControllerHost, Container, Painter, Scroll, SizedBox};
+
+use druid::kurbo::Circle;
 
 use druid::{PaintCtx, RenderContext, Env, Event, EventCtx, Point,
             Menu, MenuItem, TimerToken, LocalizedString, UnitPoint, Widget, WidgetPod, WidgetExt,};
@@ -58,13 +60,24 @@ impl TaskListWidget {
                 });
 
             let container = Container::new(
-                Label::new(|(d, uid): &(AppModel, String), _env: &_| {
-                    let task = d.tasks.get(uid).expect("unknown uid");
-                    format!("{}", task.name)
-                })
-                 .expand_width()
-                 .align_vertical(UnitPoint::LEFT)
-                 .padding(10.0),
+                Flex::row().with_flex_child(
+                    Label::new(|(d, uid): &(AppModel, String), _env: &_| {
+                        let task = d.tasks.get(uid).expect("unknown uid");
+                        format!("{}", task.name)
+                    })  .expand_width()
+                        .align_vertical(UnitPoint::LEFT)
+                        .padding(10.0)
+                        , 1.0)
+                    .with_child(
+                        SizedBox::new(
+                            Painter::new(|ctx: &mut PaintCtx,
+                                         (model, uid): &(AppModel, String), _env| {
+                                let task = model.tasks.get(uid).expect("unknown uid");
+                                ctx.fill(Circle::new(Point::new(5.0, 5.0), 5.0), &task.color);
+                            }))
+                            .width(10.0).height(10.0)
+                            ).padding((0.0, 0.0, 10.0, 0.0))
+                    ,
                 )
                 .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
                         shared.selected_task = uid.clone();

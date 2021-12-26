@@ -2,15 +2,11 @@ use std::rc::Rc;
 use chrono::Duration;
 use chrono::prelude::*;
 
-use lerp::Lerp;
-
 use druid::im::{Vector, OrdSet};
 use druid::lens::{self, LensExt};
 use druid::widget::{Button, Either, CrossAxisAlignment, Flex, Split, Label, List, Scroll, Controller, Painter, Radio, SizedBox};
 
-use druid::kurbo::{Circle, Rect};
-
-use druid::{Color, Cursor, Point, LinearGradient,
+use druid::{Color, Cursor, LinearGradient,
     Data, PaintCtx, RenderContext, Env, Event, EventCtx,
     UnitPoint, Widget, WidgetExt, Target, TextAlignment, Command};
 
@@ -327,24 +323,16 @@ fn lerp(a: &druid::Color, b: &druid::Color, t: f64) -> druid::Color {
     }
 }
 
-impl<T, W: Widget<T>> Controller<T, W> for ColorPickerController {
-    fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
+impl<W: Widget<Task>> Controller<Task, W> for ColorPickerController {
+    fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut Task, env: &Env) {
 
         match event {
             Event::MouseUp(ref mouse) => {
-                println!("mouse coords: {:?} | layout: {:?}", mouse.pos, ctx.size());
-
                 let idx_f = (COLORS_COUNT-1) as f64 * mouse.pos.x / ctx.size().width;
-                println!("idx_f: {:?}", idx_f);
-
                 let left_idx = idx_f.floor().round() as usize;
                 let right_idx = idx_f.ceil().round() as usize;
-
-                let result = lerp(&GRADIENT_COLORS[left_idx], &GRADIENT_COLORS[right_idx],
+                data.color = lerp(&GRADIENT_COLORS[left_idx], &GRADIENT_COLORS[right_idx],
                                   idx_f - left_idx as f64);
-
-                println!("result: {:?}", result);
-
             }
             _ => child.event(ctx, event, data, env),
         }
