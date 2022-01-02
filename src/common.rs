@@ -27,7 +27,7 @@ pub const COMMAND_TASK_COMPLETED: Selector<String> = Selector::new("tcmenu.task_
 
 pub const COMMAND_TLIST_REQUEST_FOCUS: Selector    = Selector::new("tlist_request_focus");
 
-pub const COMMAND_DETAILS_REQUEST_FOCUS: Selector<WidgetId>  = Selector::new("tdetails_request_focus");
+pub const COMMAND_EDIT_REQUEST_FOCUS: Selector<WidgetId>  = Selector::new("tedit_request_focus");
 
 pub const TASK_NAME_EDIT_WIDGET: WidgetId = WidgetId::reserved(1000);
 

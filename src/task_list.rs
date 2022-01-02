@@ -136,7 +136,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 data.0.update_tags();
                 data.0.show_task_edit = true;
 
-                ctx.submit_command(COMMAND_DETAILS_REQUEST_FOCUS.with(TASK_NAME_EDIT_WIDGET));
+                ctx.submit_command(COMMAND_EDIT_REQUEST_FOCUS.with(TASK_NAME_EDIT_WIDGET));
                 ctx.request_update();
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_COMPLETED) => {
@@ -276,7 +276,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             },
 
             Event::KeyUp(key) if key.code == druid::Code::KeyE => {
-                ctx.submit_command(COMMAND_DETAILS_REQUEST_FOCUS.with(TASK_NAME_EDIT_WIDGET));
+                ctx.submit_command(COMMAND_EDIT_REQUEST_FOCUS.with(TASK_NAME_EDIT_WIDGET));
             },
 
             Event::KeyUp(key) if key.code == druid::Code::Tab => {

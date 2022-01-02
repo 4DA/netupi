@@ -85,7 +85,7 @@ pub fn task_summary_widget() -> impl Widget<((Task, TimePrefixSum), bool)> {
 
     Either::new(|((_,_), visible): &((Task, TimePrefixSum), bool), _env: &Env|
                 *visible == true,
-                column.controller(TaskDetailsController)
+                column
                 .lens(druid::lens!(((Task, TimePrefixSum), bool), 0)),
                 SizedBox::empty().expand_width())
 }
@@ -274,6 +274,7 @@ pub fn task_edit_widget() -> impl Widget<(Task, bool)> {
         .with_flex_child(
             Either::new(|(_, visible): &(Task, bool), _env: &Env| *visible == true,
                         column
+                        .controller(TaskDetailsController)
                         .lens(druid::lens!((Task, bool), 0)),
                         SizedBox::empty().expand_width()),
             1.0)
@@ -291,10 +292,10 @@ impl<T, W: Widget<T>> Controller<T, W> for TaskDetailsController {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
 
         match event {
-            Event::Command(cmd) if cmd.is(COMMAND_DETAILS_REQUEST_FOCUS) => {
+            Event::Command(cmd) if cmd.is(COMMAND_EDIT_REQUEST_FOCUS) => {
                 let command =
                     Command::new(editable_label::BEGIN_EDITING, (),
-                        Target::Widget(cmd.get(COMMAND_DETAILS_REQUEST_FOCUS).unwrap().clone()));
+                        Target::Widget(cmd.get(COMMAND_EDIT_REQUEST_FOCUS).unwrap().clone()));
                 ctx.submit_command(command);
                 ctx.set_handled();
 
