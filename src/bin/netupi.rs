@@ -3,7 +3,7 @@
 
 use std::rc::Rc;
 use std::time::SystemTime;
-use std::env;
+use std::path::PathBuf;
 
 use druid::widget::prelude::*;
 use druid::im::{vector, Vector};
@@ -18,6 +18,8 @@ use druid::{
 
 use chrono::prelude::*;
 
+use clap::Parser;
+
 use netupi::maybe::Maybe;
 use netupi::task::*;
 use netupi::db;
@@ -29,10 +31,23 @@ use netupi::common::*;
 use netupi::time;
 use netupi::widgets;
 
-pub fn main() -> anyhow::Result<()> {
-    let _args: Vec<String> = env::args().collect();
+#[derive(Parser, Debug)]
+#[clap(about, version, author)]
+struct Args {
+    #[clap(short, long)]
+    config_dir: Option<PathBuf>,
+}
 
-    let conn = db::init()?;
+fn get_db_path(args: &Args) -> PathBuf {
+    let mut default_config_dir = dirs::config_dir().unwrap_or(PathBuf::new());
+    default_config_dir.push("netupi");
+    args.config_dir.clone().unwrap_or(default_config_dir)
+}
+
+pub fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+
+    let conn = db::init(get_db_path(&args))?;
     let db = Rc::new(conn);
 
     let (tasks, tags) = db::get_tasks(db.clone())?;
@@ -78,7 +93,7 @@ pub fn main() -> anyhow::Result<()> {
         .window_size((1200.0, 800.0))
         .menu(make_menu)
         .title(LocalizedString::new("netupi-window-title").with_placeholder("netupi"));
-    
+
     AppLauncher::with_window(main_window)
         .log_to_console()
         .launch(data)

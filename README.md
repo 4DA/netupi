@@ -12,7 +12,7 @@ minimalistic time tracker with simple pomodoro timer
 - "n" key : add new task
 
 # Program data
-Program settings and tasks are stored user's config directory:
+Program settings and tasks are stored user's config directory. The default values are:
 ## Linux:
 `$XDG_CONFIG_HOME/netupi or $HOME/.config`
 i.e. `/home/alice/.config`
@@ -27,6 +27,9 @@ i.e. `C:\Users\Alice\AppData\Roaming\netupi`
 
 # Configuration
     No configuration at the moment.
+
+# Command line arguments
+- `--config-dir <DIR>` path for user's config directory
 
 # Importing CSV from [Goodtime](https://f-droid.org/en/packages/com.apps.adrcotfas.goodtime/)
 ```

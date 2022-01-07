@@ -13,8 +13,6 @@ use rusqlite::{
 
 use chrono::Duration;
 
-use dirs;
-
 use anyhow;
 
 use chrono::{DateTime, Utc, TimeZone};
@@ -51,10 +49,8 @@ impl FromSql for TimeWrapper {
     }
 }
 
-pub fn init() -> anyhow::Result<Connection>{
-    let mut path_buf = dirs::config_dir().unwrap_or(PathBuf::new());
-    path_buf.push("netupi");
-
+pub fn init(mut path_buf: PathBuf) -> anyhow::Result<Connection>
+{
     let dir = path_buf.to_str().unwrap();
     fs::create_dir_all(dir)?;
 
@@ -63,6 +59,8 @@ pub fn init() -> anyhow::Result<Connection>{
     let file_path = path_buf.to_str().unwrap();
 
     let conn = Connection::open(file_path)?;
+
+    println!("opened db: {:?}", file_path);
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tasks (
