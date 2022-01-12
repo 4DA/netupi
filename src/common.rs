@@ -29,7 +29,8 @@ pub const COMMAND_TLIST_REQUEST_FOCUS: Selector    = Selector::new("tlist_reques
 
 pub const COMMAND_EDIT_REQUEST_FOCUS: Selector<WidgetId>  = Selector::new("tedit_request_focus");
 
-pub const TASK_NAME_EDIT_WIDGET: WidgetId = WidgetId::reserved(1000);
+pub const TASK_EDIT_WIDGET: WidgetId = WidgetId::reserved(1000);
+pub const TASK_NAME_EDIT_WIDGET: WidgetId = WidgetId::reserved(1001);
 
 pub type BellBytes = &'static [u8; 5016];
 

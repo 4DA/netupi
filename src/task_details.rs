@@ -7,7 +7,7 @@ use druid::lens::{self, LensExt};
 use druid::widget::{Button, Either, CrossAxisAlignment, Flex, Split, Label, List, Scroll, Controller, Painter, Radio, SizedBox};
 
 use druid::{Color, Cursor, LinearGradient,
-    Data, PaintCtx, RenderContext, Env, Event, EventCtx,
+    Data, PaintCtx, RenderContext, Env, Event, EventCtx, LifeCycle, LifeCycleCtx,
     UnitPoint, Widget, WidgetExt, Target, TextAlignment, Command};
 
 use crate::editable_label;
@@ -275,6 +275,7 @@ pub fn task_edit_widget() -> impl Widget<(Task, bool)> {
             Either::new(|(_, visible): &(Task, bool), _env: &Env| *visible == true,
                         column
                         .controller(TaskDetailsController)
+                        .with_id(TASK_EDIT_WIDGET)
                         .lens(druid::lens!((Task, bool), 0)),
                         SizedBox::empty().expand_width()),
             1.0)
@@ -304,8 +305,23 @@ impl<T, W: Widget<T>> Controller<T, W> for TaskDetailsController {
             Event::Notification(cmd) if cmd.is(editable_label::FOCUS_RESIGNED) => {
                 ctx.set_handled();
                 ctx.submit_command(COMMAND_TLIST_REQUEST_FOCUS.with(()));
-            }
+            },
+
+            Event::KeyUp(key) if key.code == druid::Code::Tab => {
+                child.event(ctx, event, data, env);
+                ctx.set_handled();
+            },
+
+
             _ => child.event(ctx, event, data, env),
+        }
+    }
+
+    fn lifecycle(&mut self, child: &mut W, ctx: &mut LifeCycleCtx, event: &LifeCycle,
+                 data: &T, env: &Env)
+    {
+        match event {
+            _ => child.lifecycle(ctx, event, data, env)
         }
     }
 }

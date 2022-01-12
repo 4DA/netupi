@@ -79,7 +79,7 @@ pub fn main() -> anyhow::Result<()> {
         focus_filter: FocusFilter::All, // select filter of last tracked task
         tag_filter: None,
         hot_log_entry: None,
-        show_task_edit: true,
+        show_task_edit: false,
         show_task_summary: true,
     };
 

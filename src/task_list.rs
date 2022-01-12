@@ -136,7 +136,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                 data.0.update_tags();
                 data.0.show_task_edit = true;
 
-                ctx.submit_command(COMMAND_EDIT_REQUEST_FOCUS.with(TASK_NAME_EDIT_WIDGET));
+                ctx.set_focus(TASK_EDIT_WIDGET);
                 ctx.request_update();
             },
             Event::Command(cmd) if cmd.is(COMMAND_TASK_COMPLETED) => {
@@ -276,7 +276,12 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             },
 
             Event::KeyUp(key) if key.code == druid::Code::KeyE => {
-                ctx.submit_command(COMMAND_EDIT_REQUEST_FOCUS.with(TASK_NAME_EDIT_WIDGET));
+                if !data.0.show_task_edit {
+                    data.0.show_task_edit = true;
+                    ctx.set_focus(TASK_NAME_EDIT_WIDGET);
+                } else {
+                    data.0.show_task_edit = false;
+                }
             },
 
             Event::KeyUp(key) if key.code == druid::Code::Tab => {
@@ -284,7 +289,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             },
 
             // Event::KeyUp(key) => {
-            //     println!("unknown key: {:?}", key);
+            //     println!("TaskList: unknown key: {:?}", key);
             // },
 
             _ => self.inner.event(ctx, event, data, _env),
@@ -293,11 +298,13 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &(AppModel, Vector<String>), _env: &Env) {
         match event {
-            LifeCycle::WidgetAdded => {
+            LifeCycle::BuildFocusChain => {
                 ctx.register_for_focus();
                 ctx.submit_command(COMMAND_TLIST_REQUEST_FOCUS.with(()));
                 self.inner.lifecycle(ctx, event, _data, _env)
             },
+
+            // LifeCycle::FocusChanged(val) => println!("TaskList: focus = {}", val),
 
             _ => self.inner.lifecycle(ctx, event, _data, _env)
         };
@@ -322,7 +329,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
     fn paint(&mut self, ctx: &mut PaintCtx, data: &(AppModel, Vector<String>), env: &Env) {
         self.inner.paint(ctx, data, env);
         let bounds = ctx.size().to_rect();
-        if ctx.is_focused() {
+        if ctx.has_focus() {
             ctx.stroke(bounds, &TASK_FOCUS_BORDER, 2.0);
         }
     }
