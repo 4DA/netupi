@@ -44,6 +44,19 @@ fn get_db_path(args: &Args) -> PathBuf {
     args.config_dir.clone().unwrap_or(default_config_dir)
 }
 
+fn get_last_task(tasks: &TaskMap, records: &TimeRecordMap) -> Option<String>
+{
+    for r in records.iter().rev() {
+        if let Some(t) = tasks.get(&r.1.uid) {
+            if t.task_status != TaskStatus::Archived {
+                return Some(t.uid.clone());
+            }
+        }
+    }
+
+    return None;
+}
+
 pub fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
@@ -62,7 +75,13 @@ pub fn main() -> anyhow::Result<()> {
         task_sums.insert(uid.clone(), sum);
     }
 
-    let selected_task = "".to_string();
+    let last_task = get_last_task(&tasks, &records);
+
+    let filter = if let Some(ref uid) = last_task {
+        FocusFilter::Status(tasks.get(uid).unwrap().task_status.clone())
+    } else {
+        FocusFilter::All
+    };
 
     let mut data = AppModel{
         db,
@@ -75,16 +94,15 @@ pub fn main() -> anyhow::Result<()> {
                               timestamp: Rc::new(Utc::now()),
                               timer_id: Rc::new(TimerToken::INVALID),
                               elapsed: Rc::new(chrono::Duration::zero())},
-        selected_task: selected_task,
-        focus_filter: FocusFilter::All, // select filter of last tracked task
+
+        // todo make selected_task Option
+        selected_task: if let Some(uid) = last_task {uid} else {"".to_string()},
+        focus_filter: filter, // select filter of last tracked task
         tag_filter: None,
         hot_log_entry: None,
         show_task_edit: false,
         show_task_summary: true,
     };
-
-    let selected = data.get_uids_filtered().front().unwrap_or(&"".to_string()).clone();
-    data.selected_task = selected;
 
     // TODO should be done in ctor
     data.update_tags();
