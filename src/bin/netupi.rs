@@ -96,8 +96,8 @@ pub fn main() -> anyhow::Result<()> {
                               elapsed: Rc::new(chrono::Duration::zero())},
 
         // todo make selected_task Option
-        selected_task: if let Some(uid) = last_task {uid} else {"".to_string()},
-        focus_filter: filter, // select filter of last tracked task
+        selected_task: last_task,
+        focus_filter: filter,
         tag_filter: None,
         hot_log_entry: None,
         show_task_edit: false,
@@ -366,7 +366,7 @@ fn ui_builder() -> impl Widget<AppModel> {
             .lens(lens::Identity.map(
                 // Expose shared data with children data
                 |d: &AppModel|
-                match d.tasks.get(&d.selected_task)
+                match d.get_task(&d.selected_task)
                 {
                     Some(task) => Some((task.clone(), d.show_task_edit)),
                     _ => None,
@@ -376,7 +376,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                     if let Some((mut new_task, vis)) = x {
                         d.show_task_edit = vis;
 
-                        if let Some(prev) = d.tasks.get(&d.selected_task) {
+                        if let Some(prev) = d.get_task(&d.selected_task) {
                             if !prev.same(&new_task) {
 
                                 if let Err(what) = db::update_task(d.db.clone(), &new_task) {
@@ -393,7 +393,8 @@ fn ui_builder() -> impl Widget<AppModel> {
                                     }
                                 }
 
-                                d.tasks = d.tasks.update(d.selected_task.clone(), new_task);
+                                d.tasks = d.tasks.update(d.selected_task.as_ref().unwrap().clone(),
+                                                         new_task);
                                 d.update_tags();
 
                                 // if currently select tag filter is missing
@@ -425,10 +426,10 @@ fn ui_builder() -> impl Widget<AppModel> {
             .lens(lens::Identity.map(
                 // Expose shared data with children data
                 |d: &AppModel|
-                match (d.tasks.get(&d.selected_task).map_or(None, |r| Some(r.clone())),
-                       d.task_sums.get(&d.selected_task).map_or(TimePrefixSum::new(), |r| r.clone()))
+                match (d.get_task(&d.selected_task),
+                       d.get_task_sum(&d.selected_task).unwrap_or(&TimePrefixSum::new()))
                 {
-                    (Some(task), time) => Some(((task, time), d.show_task_summary)),
+                    (Some(task), time) => Some(((task.clone(), time.clone()), d.show_task_summary)),
                     _ => None,
                 },
 

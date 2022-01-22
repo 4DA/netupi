@@ -47,7 +47,7 @@ pub struct AppModel {
     pub task_sums: TaskSums,
     pub tags: OrdSet<String>,
     pub tracking: TrackingCtx,
-    pub selected_task: String,
+    pub selected_task: Option<String>,
     pub focus_filter: FocusFilter,
     pub tag_filter: Option<String>,
     pub hot_log_entry: Option<Rc<DateTime<Utc>>>,
@@ -67,6 +67,18 @@ pub fn get_rest_interval(model: &AppModel, uid: &String) -> chrono::Duration {
 }
 
 impl AppModel {
+    pub fn get_task(&self, uid_opt: &Option<String>) -> Option<&Task> {
+        if let Some(uid) = uid_opt {
+            self.tasks.get(uid)
+        } else {None}
+    }
+
+    pub fn get_task_sum(&self, uid_opt: &Option<String>) -> Option<&TimePrefixSum> {
+        if let Some(uid) = uid_opt {
+            self.task_sums.get(uid)
+        } else {None}
+    }
+
     fn passes_filter(&self, task: &Task) -> bool {
         let focus_ok = match self.focus_filter {
             FocusFilter::Status(ref x) => x.eq(&task.task_status),
@@ -98,11 +110,13 @@ impl AppModel {
     }
 
     pub fn check_update_selected(&mut self) {
-        let filtered: Vector<String> = self.get_uids_filtered();
+        if let Some(ref selected) = self.selected_task {
+            let mut filtered: Vector<String> = self.get_uids_filtered();
 
-        // select any task if currently selected is filtered out
-        if !filtered.contains(&self.selected_task) {
-            self.selected_task = filtered.front().unwrap_or(&"".to_string()).clone();
+            // select any task if currently selected is filtered out
+            if !filtered.contains(selected) {
+                self.selected_task = filtered.pop_front();
+            }
         }
     }
 

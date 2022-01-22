@@ -36,8 +36,11 @@ impl TaskListWidget {
             let task_painter =
                 Painter::new(|ctx: &mut PaintCtx, (shared, uid): &(AppModel, String), _env| {
                     let bounds = ctx.size().to_rect();
-                    if shared.selected_task.eq(uid) {
-                        ctx.fill(bounds, &TASK_COLOR_BG);
+
+                    if let Some(ref selected) = shared.selected_task {
+                        if selected.contains(uid) {
+                            ctx.fill(bounds, &TASK_COLOR_BG);
+                        }
                     }
 
                     match shared.tracking.state {
@@ -75,12 +78,10 @@ impl TaskListWidget {
                                 let task = model.tasks.get(uid).expect("unknown uid");
                                 ctx.fill(Circle::new(Point::new(5.0, 5.0), 5.0), &task.color);
                             }))
-                            .width(10.0).height(10.0)
-                            ).padding((0.0, 0.0, 10.0, 0.0))
-                    ,
-                )
+                            .width(10.0).height(10.0))
+                    .padding((0.0, 0.0, 10.0, 0.0)))
                 .on_click(|_ctx, (shared, uid): &mut (AppModel, String), _env| {
-                        shared.selected_task = uid.clone();
+                        shared.selected_task = Some(uid.clone());
                     })
                 .background(task_painter);
 
@@ -130,7 +131,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                     println!("db error: {}", what);
                 }
 
-                data.0.selected_task = task.uid.clone();
+                data.0.selected_task = Some(task.uid.clone());
                 data.0.tasks.insert(uid.clone(), task);
                 data.0.task_sums.insert(uid.clone(), TimePrefixSum::new());
                 data.0.update_tags();
@@ -203,45 +204,42 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
 
             //TODO think of better implementation
             Event::KeyUp(key) if key.code == druid::Code::ArrowDown => {
-                if data.0.selected_task.is_empty() {return;}
+                if let Some(ref uid) = data.0.selected_task {
+                    let mut next = None;
+                    let selected = data.0.tasks.get(uid).unwrap();
 
-                let mut next = None;
-                let selected = data.0.tasks.get(&data.0.selected_task).unwrap();
-
-                for x in data.0.get_tasks_filtered() {
-                    if x > *selected {
-                        next = Some(x);
-                        break;
+                    for x in data.0.get_tasks_filtered() {
+                        if x > *selected {
+                            next = Some(x);
+                            break;
+                        }
                     }
-                }
 
-                if let Some(next) = next {
-                    data.0.selected_task = next.uid
+                    next.map(|x| data.0.selected_task = Some(x.uid));
                 }
             },
 
             Event::KeyUp(key) if key.code == druid::Code::ArrowUp => {
-                if data.0.selected_task.is_empty() {return;}
 
-                let mut next = None;
-                let selected = data.0.tasks.get(&data.0.selected_task).unwrap();
+                if let Some(ref uid) = data.0.selected_task {
+                    let mut next = None;
+                    let selected = data.0.tasks.get(uid).unwrap();
 
-                for x in data.0.get_tasks_filtered() {
-                    if x == *selected {
-                        break;
+                    for x in data.0.get_tasks_filtered() {
+                        if x == *selected {
+                            break;
+                        }
+                        next = Some(x);
                     }
-                    next = Some(x);
-                }
 
-                if let Some(next) = next {
-                    data.0.selected_task = next.uid;
+                    next.map(|x| data.0.selected_task = Some(x.uid));
                 }
             },
 
             Event::KeyUp(key) if key.code == druid::Code::Space => {
-                if data.0.selected_task.is_empty() {return;}
+                if data.0.selected_task.is_none() {return;}
 
-                let selected = data.0.selected_task.clone();
+                let selected = data.0.selected_task.as_ref().unwrap().clone();
 
                 match data.0.tracking.state.clone() {
                     TrackingState::Inactive => start_tracking(&mut data.0, selected, ctx),
@@ -348,14 +346,14 @@ impl<W: Widget<(AppModel, String)>> Controller<(AppModel, String), W> for Contex
     ) {
         match event {
             Event::MouseDown(ref mouse) if mouse.button.is_right() => {
-                ctx.show_context_menu(make_task_menu(&data.0, &data.1), mouse.pos);
+                ctx.show_context_menu(make_task_menu(&data.0, &Some(data.1.clone())), mouse.pos);
             }
             _ => child.event(ctx, event, data, env),
         }
     }
 }
 
-pub fn make_task_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
+pub fn make_task_menu(d: &AppModel, current_opt: &Option<String>) -> Menu<AppModel> {
     let mut result = Menu::new(LocalizedString::new("Task"));
 
     let new_task_entry = MenuItem::new(LocalizedString::new("New task"))
@@ -364,9 +362,11 @@ pub fn make_task_menu(d: &AppModel, current: &String) -> Menu<AppModel> {
                     ctx.submit_command(COMMAND_TASK_NEW.with(()));
                     });
 
-    if current.is_empty() {
+    if current_opt.is_none() {
         return result.entry(new_task_entry);
     }
+
+    let current = current_opt.as_ref().unwrap();
 
     let start_entry = {
         let uid_for_closure = current.clone();
