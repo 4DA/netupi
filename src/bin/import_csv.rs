@@ -3,7 +3,7 @@
 // use std::time::SystemTime;
 // use chrono::{DateTime, Utc, NaiveDateTime};
 use std::rc::Rc;
-
+use std::path::PathBuf;
 use anyhow::{anyhow, Context};
 use std::env;
 
@@ -18,7 +18,10 @@ pub fn main() -> anyhow::Result<()>{
         return Err(anyhow!("Usage: import_csv <filename>"));
     }
 
-    let conn = db::init()?;
+    let mut default_config_dir = dirs::config_dir().unwrap_or(PathBuf::new());
+    default_config_dir.push("netupi");
+
+    let conn = db::init(default_config_dir)?;
     let db = Rc::new(conn);
 
     let (tasks, _tags) = db::get_tasks(db.clone())?;
