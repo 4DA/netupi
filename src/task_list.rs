@@ -276,7 +276,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             Event::KeyUp(key) if key.code == druid::Code::KeyE => {
                 if !data.0.show_task_edit {
                     data.0.show_task_edit = true;
-                    ctx.set_focus(TASK_NAME_EDIT_WIDGET);
+                    // ctx.set_focus(TASK_NAME_EDIT_WIDGET);
                 } else {
                     data.0.show_task_edit = false;
                 }
@@ -284,6 +284,12 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
 
             Event::KeyUp(key) if key.code == druid::Code::Tab => {
                 ctx.focus_next();
+            },
+
+            Event::KeyUp(key) if key.code == druid::Code::KeyC => {
+                if let Some(ref selected) = data.0.selected_task {
+                    ctx.submit_command(COMMAND_TASK_COMPLETED.with(selected.clone()));
+                }
             },
 
             // Event::KeyUp(key) => {

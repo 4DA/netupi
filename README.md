@@ -10,6 +10,8 @@ minimalistic time tracker with simple pomodoro timer
 - escape : stop tracking
 - right mouse button : task context menu
 - "n" key : add new task
+- "c" key : mark task completed
+- TAB key : keyboard focus to task edit widget
 
 # Program data
 Program settings and tasks are stored user's config directory. The default values are:
