@@ -63,7 +63,18 @@ impl TaskListWidget {
                 });
 
             let container = Container::new(
-                Flex::row().with_flex_child(
+                Flex::row()
+                    .with_child(
+                    Label::new(|(d, uid): &(AppModel, String), _env: &_| {
+                        let task = d.tasks.get(uid).expect("unknown uid");
+                        format!("{}", match task.priority.into() {
+                            CuaPriority::Low => "↓",
+                            CuaPriority::Normal | CuaPriority::Unspecified => " ",
+                            CuaPriority::High => "❗",
+                        })
+                    }).fix_width(15.0))
+
+                    .with_flex_child(
                     Label::new(|(d, uid): &(AppModel, String), _env: &_| {
                         let task = d.tasks.get(uid).expect("unknown uid");
                         format!("{}", task.name)
