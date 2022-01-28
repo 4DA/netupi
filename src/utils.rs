@@ -1,9 +1,14 @@
 use std::rc::Rc;
 use std::any::type_name;
 
+use std::thread;
+use std::io::BufReader;
+
 use anyhow;
 use chrono::{DateTime, Utc, NaiveDateTime, Duration};
 use druid::im::{HashMap};
+
+use rodio::{Decoder, OutputStream, Sink};
 
 use crate::task::*;
 
@@ -52,4 +57,28 @@ pub fn get_csv_entries(path: &str, task_map: &TaskMap)
     }
 
     Ok((result_tasks, result_records))
+}
+
+pub fn play_sound(bytes: &'static [u8], volume: f32) {
+    thread::spawn(move || {
+        let bytes = std::io::Cursor::new(bytes.clone());
+        // Get a output stream handle to the default physical sound device
+        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+        // Load a sound from a file, using a path relative to Cargo.toml
+        let buf = BufReader::new(bytes);
+        // Decode that sound file into a source
+        let source = Decoder::new(buf).unwrap();
+
+        let sink = Sink::try_new(&stream_handle).unwrap();
+        sink.set_volume(volume);
+        sink.append(source);
+
+        // The sound plays in a separate thread. This call will block the current thread until the sink
+        // has finished playing all its queued sounds.
+        // sink.sleep_until_end();
+
+        // The sound plays in a separate audio thread,
+        // so we need to keep the main thread alive while it's playing.
+        std::thread::sleep(std::time::Duration::from_secs(sink.len() as u64));
+    });
 }

@@ -1,6 +1,4 @@
 use std::rc::Rc;
-use std::thread;
-use std::io::BufReader;
 
 use druid::im::{Vector};
 use druid::widget::prelude::*;
@@ -16,12 +14,11 @@ use notify_rust::Notification;
 
 use chrono::prelude::*;
 
-use rodio::{Decoder, OutputStream, Sink};
-
 use crate::task::*;
 use crate::app_model::*;
 use crate::common::*;
 use crate::db;
+use crate::utils;
 
 pub struct TaskListWidget {
     inner: WidgetPod<(AppModel, Vector<String>),
@@ -182,7 +179,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
             }
             Event::Timer(id) => {
                 if *id == *data.0.tracking.timer_id {
-                    play_sound(SOUND_TASK_FINISH);
+                    utils::play_sound(SOUND_TASK_FINISH, WORK_TIMER_VOLUME);
 
                     match data.0.tracking.state.clone() {
                         TrackingState::Active(uid) => {
@@ -542,27 +539,4 @@ fn archive_task(model: &mut AppModel, uid: &String) {
     }
     model.update_tags();
     model.check_update_selected();
-}
-
-pub fn play_sound(bytes: &'static [u8]) {
-    thread::spawn(move || {
-        let bytes = std::io::Cursor::new(bytes.clone());
-        // Get a output stream handle to the default physical sound device
-        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-        // Load a sound from a file, using a path relative to Cargo.toml
-        let buf = BufReader::new(bytes);
-        // Decode that sound file into a source
-        let source = Decoder::new(buf).unwrap();
-
-        let sink = Sink::try_new(&stream_handle).unwrap();
-        sink.append(source);
-
-        // The sound plays in a separate thread. This call will block the current thread until the sink
-        // has finished playing all its queued sounds.
-        // sink.sleep_until_end();
-
-        // The sound plays in a separate audio thread,
-        // so we need to keep the main thread alive while it's playing.
-        std::thread::sleep(std::time::Duration::from_secs(sink.len() as u64));
-    });
 }

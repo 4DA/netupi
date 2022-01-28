@@ -32,11 +32,14 @@ pub const COMMAND_EDIT_REQUEST_FOCUS: Selector<WidgetId>  = Selector::new("tedit
 pub const TASK_EDIT_WIDGET: WidgetId = WidgetId::reserved(1000);
 pub const TASK_NAME_EDIT_WIDGET: WidgetId = WidgetId::reserved(1001);
 
-pub type BellBytes = &'static [u8; 5016];
+// https://freesound.org/people/Jummit/sounds/528561/
+pub type WorkCompleteBytes = &'static [u8; 5124];
+
+pub const WORK_TIMER_VOLUME: f32 = 0.7;
 
 #[cfg(target_os = "macos")]
-pub static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
+pub static SOUND_TASK_FINISH: WorkCompleteBytes = std::include_bytes!("../res/notif.ogg");
 #[cfg(target_os = "linux")]
-pub static SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
+pub static SOUND_TASK_FINISH: WorkCompleteBytes = std::include_bytes!("../res/notif.ogg");
 #[cfg(target_os = "windows")]
-pub const SOUND_TASK_FINISH: BellBytes = std::include_bytes!("../res/bell.ogg");
+pub const SOUND_TASK_FINISH: WorkCompleteBytes = std::include_bytes!("../res/notif.ogg");
