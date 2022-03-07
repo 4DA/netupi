@@ -72,6 +72,11 @@ impl From<CuaPriority> for u32 {
     }
 }
 
+#[derive(Debug, Clone, Data, Lens)]
+pub struct TaskViewState {
+    pub skip_days: i64
+}
+
 #[derive(Debug, Clone, Data, Lens, Eq)]
 pub struct Task {
     pub uid: String,

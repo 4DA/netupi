@@ -429,12 +429,12 @@ fn ui_builder() -> impl Widget<AppModel> {
                 match (d.get_task(&d.selected_task),
                        d.get_task_sum(&d.selected_task).unwrap_or(&TimePrefixSum::new()))
                 {
-                    (Some(task), time) => Some(((task.clone(), time.clone()), d.show_task_summary)),
+                    (Some(task), time) => Some(((task.clone(), TaskViewState{skip_days: 0}, time.clone()), d.show_task_summary)),
                     _ => None,
                 },
 
-                |d: &mut AppModel, x: Option<((Task, TimePrefixSum), bool)>| {
-                    if let Some(((_, _), vis)) = x {
+                |d: &mut AppModel, x: Option<((Task, TaskViewState, TimePrefixSum), bool)>| {
+                    if let Some(((_, _ , _), vis)) = x {
                         d.show_task_summary = vis;
                     }
                 },
