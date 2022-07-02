@@ -218,6 +218,19 @@ pub fn get_total_time(prefix_sum: &TimePrefixSum, from: &DateTime::<Utc>, to: &D
     }
 }
 
+// pub fn get_time_by_days(prefix_sum: &TimePrefixSum, from: &DateTime::<Utc>, to: &DateTime::<Utc>)
+//     -> OrdMap<DateTime::<Utc>, chrono::Duration>
+// {
+//     let (before, after1) = prefix_sum.split(from);
+//     let (after, _) = after1.split(to);
+
+//     match (before.get_max(), after.get_max()) {
+//         (Some(min), Some(max)) => *max.1.duration - *min.1.duration,
+//         (None, Some(max)) => *max.1.duration,
+//             _ => Duration::zero(),
+//     }
+// }
+
 pub fn get_total_time_from_sums(sums: &TaskSums, from: &DateTime::<Utc>,
                                 to: &DateTime::<Utc>) -> chrono::Duration
 {

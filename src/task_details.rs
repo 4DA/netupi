@@ -21,37 +21,41 @@ const COLORS_COUNT: usize = 6;
 const GRADIENT_COLORS: [Color; COLORS_COUNT] =
     [Color::RED, Color::YELLOW, Color::GREEN, Color::BLUE, Color::NAVY, Color::PURPLE];
 
-pub fn task_summary_widget() -> impl Widget<((Task, TaskViewState, TimePrefixSum), bool)> {
+type TaskSummaryCtx = (Task, TaskViewState, TimePrefixSum);
+
+fn get_day_time(((_task, _view_state, sum), i): &(TaskSummaryCtx, i64))-> String {
+
+    let now = time::daystart(Local::now());
+
+    let date = now.checked_sub_signed(Duration::days(*i)).unwrap();
+    let prev_date = now.checked_sub_signed(Duration::days(i+1)).unwrap();
+    let duration = get_total_time(sum, &prev_date, &date);
+    let weekday = date.naive_local().weekday().to_string();
+    let day = format!("{}, {}", &weekday, &date.format("%d %b").to_string());
+
+    let mut result = String::new();
+    result.push_str(&day);
+    result.push_str("    ");
+    result.push_str(&format!("{:>8}", &time::format_duration(&duration)));
+    return result;
+}
+
+pub fn task_summary_widget() -> impl Widget<(TaskSummaryCtx, bool)> {
     let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
+    // future:
     // merge two columns, add AppModel::Summary::restrospective_i
     // parameter to show [n*i; n*(i+1)] recent entries
     // todo: draw smth like calendar here
 
-    let days_label =
-        Label::new(|(_, view_state, sum): &(Task, TaskViewState, TimePrefixSum), _env: &_| {
-            let mut result = String::new();
-            let now = time::daystart(Local::now());
-
-            for i in 0..7 {
-                let date = now.checked_sub_signed(Duration::days(i)).unwrap();
-                let prev_date = now.checked_sub_signed(Duration::days(i+1)).unwrap();
-                let duration = get_total_time(sum, &prev_date, &date);
-
-                // if duration.is_zero() { continue; }
-
-                let weekday = date.naive_local().weekday().to_string();
-
-                let day = format!("{}, {}", &weekday, &date.format("%d %b").to_string());
-                result.push_str(&day);
-
-                result.push_str("    ");
-                result.push_str(&format!("{:>8}", &time::format_duration(&duration)));
-                result.push_str("\n");
-            }
-            
-            return result;
-        });
+    let days_list =
+        List::new(||
+                  Label::new(|ctx: &(TaskSummaryCtx, i64), _env: &_| {
+                      get_day_time(ctx)
+                  }).with_font(FONT_LOG_DESCR.clone()))
+        .lens(lens::Identity.map(
+            |tvs: &TaskSummaryCtx| ((tvs.0.clone(), tvs.1.clone(), tvs.2.clone()), (0..21).collect()),
+            |_: &mut TaskSummaryCtx, _:(TaskSummaryCtx,Vector<i64>)| {}));
 
     column.add_default_spacer();
     column.add_child(
@@ -61,7 +65,7 @@ pub fn task_summary_widget() -> impl Widget<((Task, TaskViewState, TimePrefixSum
                     .with_default_spacer()
                 .with_child(widgets::duration_widget()
                             .lens(lens::Map::new(
-                                |(_task, _vs, sum): &(Task, TaskViewState, TimePrefixSum)|
+                                |(_task, _vs, sum): &TaskSummaryCtx|
                                 Rc::new(time::get_duration(sum, &Local::now())),
                                 |_, _| {})))
                 ,
@@ -70,7 +74,7 @@ pub fn task_summary_widget() -> impl Widget<((Task, TaskViewState, TimePrefixSum
                     .with_default_spacer()
                     .with_child(
                         Flex::row()
-                            .with_child(Scroll::new(days_label.with_font(FONT_LOG_DESCR.clone())))
+                            .with_child(Scroll::new(days_list))
                             .padding(10.0)
                             .background(
                                 Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
@@ -79,10 +83,10 @@ pub fn task_summary_widget() -> impl Widget<((Task, TaskViewState, TimePrefixSum
                                 })))
         ).bar_size(0.0));
 
-    Either::new(|((_, _, _), visible): &((Task, TaskViewState, TimePrefixSum), bool), _env: &Env|
+    Either::new(|((_, _, _), visible): &(TaskSummaryCtx, bool), _env: &Env|
                 *visible == true,
                 column
-                .lens(druid::lens!(((Task, TaskViewState, TimePrefixSum), bool), 0)),
+                .lens(druid::lens!((TaskSummaryCtx, bool), 0)),
                 SizedBox::empty().expand_width())
 }
 
