@@ -41,7 +41,6 @@ fn get_day_time(((_task, _view_state, sum), i): &(TaskSummaryCtx, i64))-> String
 }
 
 pub fn task_summary_widget() -> impl Widget<(TaskSummaryCtx, bool)> {
-    let mut column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
 
     // future:
     // merge two columns, add AppModel::Summary::restrospective_i
@@ -53,39 +52,38 @@ pub fn task_summary_widget() -> impl Widget<(TaskSummaryCtx, bool)> {
                   Label::new(|ctx: &(TaskSummaryCtx, i64), _env: &_| {
                       get_day_time(ctx)
                   }).with_font(FONT_LOG_DESCR.clone()))
+        .padding((10.0, 10.0, 25.0, 10.0))
         .lens(lens::Identity.map(
-            |tvs: &TaskSummaryCtx| ((tvs.0.clone(), tvs.1.clone(), tvs.2.clone()), (0..21).collect()),
+            |tvs: &TaskSummaryCtx| ((tvs.0.clone(), tvs.1.clone(), tvs.2.clone()), (0..28).collect()),
             |_: &mut TaskSummaryCtx, _:(TaskSummaryCtx,Vector<i64>)| {}));
 
-    column.add_default_spacer();
-    column.add_child(
-        Split::columns(
-                Flex::column()
-                    .with_child(Label::new("Total time").with_font(FONT_CAPTION_DESCR.clone()))
-                    .with_default_spacer()
-                .with_child(widgets::duration_widget()
-                            .lens(lens::Map::new(
-                                |(_task, _vs, sum): &TaskSummaryCtx|
-                                Rc::new(time::get_duration(sum, &Local::now())),
-                                |_, _| {})))
-                ,
-                Flex::column()
-                    .with_child(Label::new("Retrospective").with_font(FONT_CAPTION_DESCR.clone()))
-                    .with_default_spacer()
-                    .with_child(
-                        Flex::row()
-                            .with_child(Scroll::new(days_list))
-                            .padding(10.0)
-                            .background(
-                                Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
-                                    let bounds = ctx.size().to_rect();
-                                    ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                                })))
-        ).bar_size(0.0));
+
+    let split = Split::columns(
+        Flex::column()
+            .with_child(Label::new("Total time").with_font(FONT_CAPTION_DESCR.clone()))
+            .with_default_spacer()
+            .with_child(widgets::duration_widget()
+                        .lens(lens::Map::new(
+                            |(_task, _vs, sum): &TaskSummaryCtx|
+                            Rc::new(time::get_duration(sum, &Local::now())),
+                            |_, _| {})))
+            ,
+        Flex::column()
+            .with_child(Label::new("Retrospective").with_font(FONT_CAPTION_DESCR.clone()))
+            .with_default_spacer()
+            .with_flex_child(
+                Scroll::new(Flex::row().with_child(days_list))
+                    .vertical()
+                    .background(
+                        Painter::new(|ctx: &mut PaintCtx, _item: &_, _env| {
+                            let bounds = ctx.size().to_rect();
+                            ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
+                        })), 1.0)
+    ).bar_size(0.0);
 
     Either::new(|((_, _, _), visible): &(TaskSummaryCtx, bool), _env: &Env|
                 *visible == true,
-                column
+                split
                 .lens(druid::lens!((TaskSummaryCtx, bool), 0)),
                 SizedBox::empty().expand_width())
 }

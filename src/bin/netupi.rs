@@ -418,7 +418,7 @@ fn ui_builder() -> impl Widget<AppModel> {
 
     tasks_column.add_spacer(15.0);
 
-    tasks_column.add_child(
+    tasks_column.add_flex_child(
         Maybe::new(
             || task_summary_widget().boxed(),
             || SizedBox::empty().expand_width().boxed(),
@@ -439,8 +439,7 @@ fn ui_builder() -> impl Widget<AppModel> {
                     }
                 },
             )),
-    );
-
+    3.0);
 
     main_row.add_flex_child(tasks_column
                             .padding(10.0)
