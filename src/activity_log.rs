@@ -5,7 +5,7 @@ use druid::widget::prelude::*;
 use druid::im::{Vector};
 use druid::lens::{self, LensExt};
 
-use druid::widget::{CrossAxisAlignment, Controller, Flex, Label, List, Container, Painter, Scroll};
+use druid::widget::{CrossAxisAlignment, Controller, Flex, Label, List, Container, Painter};
 
 use druid::{
     Data, PaintCtx, RenderContext, Env, Event, EventCtx, kurbo,
@@ -100,7 +100,6 @@ impl ActivityLogWidget {
         let flex = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start)
 
             .with_child(
-                Scroll::new(                
                     List::new(||{
                         Label::new(|((model, _killed), record): &TimeRecordCtx, _env: &_| {
                             if let Some(task) = model.tasks.get(&record.uid) {
@@ -183,7 +182,7 @@ impl ActivityLogWidget {
                         }
                     }
                 },
-            ))));
+            )));
 
         ActivityLogWidget {inner: WidgetPod::new(Container::new(flex)), hot: None}
     }
