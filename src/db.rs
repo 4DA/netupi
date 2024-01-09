@@ -60,8 +60,6 @@ pub fn init(mut path_buf: PathBuf) -> anyhow::Result<Connection>
 
     let conn = Connection::open(file_path)?;
 
-    println!("opened db: {:?}", file_path);
-
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tasks (
              uid text primary key,
