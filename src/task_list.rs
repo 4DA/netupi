@@ -189,7 +189,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                             Notification::new()
                                 .summary(&format!("netupi: \"{}\" session finished",
                                                data.0.tasks.get(&uid).unwrap().name))
-                                .show().unwrap();
+                                .show();
 
                             start_rest(&mut data.0, uid, ctx);
                         },
