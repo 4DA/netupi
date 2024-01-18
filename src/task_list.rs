@@ -199,7 +199,7 @@ impl Widget<(AppModel, Vector<String>)> for TaskListWidget {
                             Notification::new()
                                 .summary(&format!("netupi: \"{}\" break finished",
                                                data.0.tasks.get(&uid).unwrap().name))
-                                .show().unwrap();
+                                .show();
 
                             data.0.tracking.state = TrackingState::Inactive
                         },
