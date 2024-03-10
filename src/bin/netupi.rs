@@ -5,16 +5,16 @@ use std::rc::Rc;
 use std::time::SystemTime;
 use std::path::PathBuf;
 
-use druid::widget::prelude::*;
-use druid::im::{vector, Vector};
-use druid::lens::{self, LensExt};
-use druid::widget::{CrossAxisAlignment, Flex, Label, SizedBox, List, Scroll, Container, Painter};
+use std::io::{self, stdout};
 
-use druid::{
-    AppLauncher, Application, Data, PaintCtx, RenderContext, Env, Event, EventCtx,
-    LifeCycle, Point,
-    Menu, MenuItem, TimerToken, KeyOrValue,
-    LocalizedString, UnitPoint, Widget, WidgetPod, WidgetExt, WindowDesc, WindowId};
+use druid::{TimerToken};
+
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEventKind},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    ExecutableCommand,
+};
+use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
 
 use chrono::prelude::*;
 
@@ -30,6 +30,13 @@ use netupi::activity_log::*;
 use netupi::common::*;
 use netupi::time;
 use netupi::widgets;
+
+const TODO_HEADER_BG: Color = tailwind::BLUE.c950;
+const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
+const ALT_ROW_COLOR: Color = tailwind::SLATE.c900;
+const SELECTED_STYLE_FG: Color = tailwind::BLUE.c300;
+const TEXT_COLOR: Color = tailwind::SLATE.c200;
+const COMPLETED_TEXT_COLOR: Color = tailwind::GREEN.c500;
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
@@ -55,6 +62,189 @@ fn get_last_task(tasks: &TaskMap, records: &TimeRecordMap) -> Option<String>
     }
 
     return None;
+}
+
+struct TodoItem {
+    todo: String,
+}
+
+struct StatefulList {
+    state: ListState,
+    items: Vec<TodoItem>,
+    last_selected: Option<usize>,
+}
+
+impl StatefulList {
+    fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => self.last_selected.unwrap_or(0),
+        };
+        self.state.select(Some(i));
+    }
+
+    fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => self.last_selected.unwrap_or(0),
+        };
+        self.state.select(Some(i));
+    }
+}
+
+impl TodoItem {
+    fn to_list_item(&self, index: usize) -> ListItem {
+        let bg_color = match index % 2 {
+            0 => NORMAL_ROW_COLOR,
+            _ => ALT_ROW_COLOR,
+        };
+        let line = format!(" ✓ {}", self.todo);
+
+        ListItem::new(line).bg(bg_color)
+    }
+}
+
+struct App {
+    model: AppModel,
+    items: StatefulList
+}
+
+impl App {
+    fn new(model: AppModel) -> App {
+
+        let state = ListState::default();
+
+        let items = model.tasks.iter().map(|t|
+            {
+                TodoItem{todo: t.1.name.clone()}
+            }).collect();
+
+        let last_selected = None;
+
+        let mut items = StatefulList{state, items, last_selected};
+        return App{model, items};
+    }
+
+    fn run(&mut self, mut terminal: Terminal<impl Backend>) -> io::Result<()> {
+
+        loop {
+            self.draw(&mut terminal)?;
+
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    use KeyCode::*;
+                    match key.code {
+                        Char('q') | Esc => return Ok(()),
+                        Char('j') | Down => self.items.next(),
+                        Char('k') | Up => self.items.previous(),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    
+    fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> io::Result<()> {
+        terminal.draw(|f| f.render_widget(self, f.size()))?;
+        Ok(())
+    }
+
+    fn render_todo(&mut self, area: Rect, buf: &mut Buffer) {
+        // We create two blocks, one is for the header (outer) and the other is for list (inner).
+        let outer_block = Block::default()
+            .borders(Borders::NONE)
+            .fg(TEXT_COLOR)
+            .bg(TODO_HEADER_BG)
+            .title("Task list")
+            .title_alignment(Alignment::Center);
+        let inner_block = Block::default()
+            .borders(Borders::NONE)
+            .fg(TEXT_COLOR)
+            .bg(NORMAL_ROW_COLOR);
+
+        // We get the inner area from outer_block. We'll use this area later to render the table.
+        let outer_area = area;
+        let inner_area = outer_block.inner(outer_area);
+
+        // We can render the header in outer_area.
+        outer_block.render(outer_area, buf);
+
+        // Iterate through all elements in the `items` and stylize them.
+        let items: Vec<ListItem> = self
+            .items
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, todo_item)| todo_item.to_list_item(i))
+            .collect();
+
+        // Create a List from all list items and highlight the currently selected one
+        let items = List::new(items)
+            .block(inner_block)
+            .highlight_style(
+                Style::default()
+                    .add_modifier(Modifier::BOLD)
+                    .add_modifier(Modifier::REVERSED)
+                    .fg(SELECTED_STYLE_FG),
+            )
+            .highlight_symbol(">")
+            .highlight_spacing(HighlightSpacing::Always);
+
+        // We can now render the item list
+        // (look careful we are using StatefulWidget's render.)
+        // ratatui::widgets::StatefulWidget::render as stateful_render
+        StatefulWidget::render(items, inner_area, buf, &mut self.items.state);
+    }
+}
+
+    fn render_title(area: Rect, buf: &mut Buffer) {
+        Paragraph::new("WIP: Title")
+            .bold()
+            .centered()
+            .render(area, buf);
+    }
+
+    fn render_footer(model: &AppModel, area: Rect, buf: &mut Buffer) {
+        let status = get_status_string(model);
+        Paragraph::new(status)
+            .centered()
+            .render(area, buf);
+    }
+
+
+
+impl Widget for &mut App {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        // Create a space for header, todo list and the footer.
+        let vertical = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(2),
+        ]);
+        let [header_area, rest_area, footer_area] = vertical.areas(area);
+
+        // Create two chunks with equal vertical screen space. One for the list and the other for
+        // the info block.
+        let vertical = Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]);
+        let [upper_item_list_area, lower_item_list_area] = vertical.areas(rest_area);
+
+        render_title(header_area, buf);
+        self.render_todo(upper_item_list_area, buf);
+        render_footer(&self.model, footer_area, buf);
+    }
 }
 
 pub fn main() -> anyhow::Result<()> {
@@ -104,49 +294,26 @@ pub fn main() -> anyhow::Result<()> {
         show_task_summary: true,
     };
 
+
     // TODO should be done in ctor
     data.update_tags();
 
-    let main_window = WindowDesc::new(ui_builder())
-        .window_size((1200.0, 800.0))
-        .menu(make_menu)
-        .title(LocalizedString::new("netupi-window-title").with_placeholder("netupi"));
+    let mut app = App::new(data);
 
-    AppLauncher::with_window(main_window)
-        .log_to_console()
-        .launch(data)
-        .expect("launch failed");
+    // initialize ratatui context
+    // --
+
+    enable_raw_mode()?;
+    stdout().execute(EnterAlternateScreen)?;
+
+    let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+
+    app.run(terminal)?;
+
+    disable_raw_mode()?;
+    stdout().execute(LeaveAlternateScreen)?;
 
     Ok(())
-}
-
-
-
-#[allow(unused_assignments)]
-fn make_menu(_: Option<WindowId>, model: &AppModel, _: &Env) -> Menu<AppModel> {
-    let base = Menu::empty();
-
-    let mut file = Menu::new(LocalizedString::new("File"));
-
-    file = file.entry(
-        MenuItem::new(LocalizedString::new("Exit"))
-            .on_activate(move |_ctx, _data, _env| {Application::global().quit();})
-    );
-    
-    let mut task = make_task_menu(model, &model.selected_task);
-    task = task.rebuild_on(|prev: &AppModel, now: &AppModel, _env: &Env| {
-        !prev.tasks.same(&now.tasks) |
-        !prev.selected_task.same(&now.selected_task) |
-        !prev.tracking.same(&now.tracking)
-    });
-
-    base.entry(file).entry(task)
-}
-
-
-struct StatusBar {
-    inner: WidgetPod<String, Label<String>>,
-    timer_id: TimerToken,
 }
 
 fn get_status_string(d: &AppModel) -> String {
@@ -186,308 +353,5 @@ fn get_status_string(d: &AppModel) -> String {
         _ => format!("")
     }
 
-}
-
-impl StatusBar {
-    fn new() -> StatusBar {
-        StatusBar{inner: WidgetPod::new(Label::dynamic(|d: &String, _env| d.clone())),
-                  timer_id: TimerToken::INVALID}
-    }
-}
-
-impl Widget<AppModel> for StatusBar {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppModel, env: &Env) {
-
-        if self.timer_id == TimerToken::INVALID {
-            self.timer_id = ctx.request_timer(UI_TIMER_INTERVAL);
-        }
-
-        let mut status = get_status_string(&data);
-
-        match event {
-            Event::Timer(id) => {
-                if *id == self.timer_id {
-                    self.timer_id = ctx.request_timer(UI_TIMER_INTERVAL);
-                    ctx.request_update();
-                    self.inner.event(ctx, event, &mut status, env);
-                }
-            },
-            _ => {self.inner.event(ctx, event, &mut status, env)},
-        }
-    }
-
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &AppModel, env: &Env) {
-        let status = get_status_string(&data);
-        self.inner.lifecycle(ctx, event, &status, env);
-    }
-
-    fn update(&mut self, ctx: &mut UpdateCtx, _old_data: &AppModel, data: &AppModel, env: &Env) {
-        let status = get_status_string(&data);
-        self.inner.update(ctx, &status, env);
-    }
-
-    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &AppModel, env: &Env) -> Size {
-        let status = get_status_string(&data);
-        let ret = self.inner.layout(ctx, &bc.loosen(), &status, env);
-        self.inner.set_origin(ctx, &status, env, Point::ORIGIN);
-        return ret;
-    }
-
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &AppModel, env: &Env) {
-        let status = get_status_string(&data);
-        self.inner.paint(ctx, &status, env);
-    }
-}
-
-fn ui_builder() -> impl Widget<AppModel> {
-    let mut root = Flex::column();
-
-    let mut main_row = Flex::row().cross_axis_alignment(CrossAxisAlignment::Start);
-
-    let mut tasks_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
-    let mut focus_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
-
-    focus_column.add_child(Label::new("Focus")
-                           .with_font(FONT_CAPTION_DESCR.clone()));
-
-    focus_column.add_spacer(10.0);
-
-    focus_column.add_child(
-        List::new(|| {
-            Container::new(
-                Label::new(|item: &(AppModel, FocusFilter), _env: &_| format!("{}", item.1.to_string()))
-                    .align_vertical(UnitPoint::LEFT)
-                    .padding(10.0)
-                    .background(
-                        Painter::new(|ctx: &mut PaintCtx, (shared, filter): &(AppModel, FocusFilter), _env| {
-                            let bounds = ctx.size().to_rect();
-                            if shared.focus_filter.eq(filter) {
-                                ctx.fill(bounds, &TASK_COLOR_BG);
-                            }
-                            else {
-                                ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                            }
-                        })
-                    )
-            )
-            .on_click(|_ctx, (model, what): &mut (AppModel, FocusFilter), _env| {
-                model.focus_filter = what.clone();
-                model.check_update_selected();
-            })
-        })
-        .with_spacing(10.0)
-        .lens(lens::Identity.map(
-            // Expose shared data with children data
-            |d: &AppModel| (d.clone(), vector![FocusFilter::Status(TaskStatus::NeedsAction),
-                                               FocusFilter::Status(TaskStatus::InProcess),
-                                               FocusFilter::Status(TaskStatus::Completed),
-                                               FocusFilter::All]),
-            |d: &mut AppModel, x: (AppModel, Vector<FocusFilter>)| {
-                // If shared data was changed reflect the changes in our AppModel
-                *d = x.0
-            },
-        ))
-    );
-
-    focus_column.add_spacer(15.0);
-
-    focus_column.add_child(Label::new("Tags")
-                           .with_font(FONT_CAPTION_DESCR.clone()));
-
-    focus_column.add_default_spacer();
-
-    focus_column.add_flex_child(
-        Scroll::new(
-            List::new(|| {
-                Container::new(
-                    Label::new(|item: &(AppModel, String), _env: &_| format!("{}", item.1))
-                        .align_vertical(UnitPoint::LEFT)
-                        .padding(10.0)
-                        .background(
-                            Painter::new(|ctx: &mut PaintCtx, (shared, id): &(AppModel, String), _env| {
-                                let bounds = ctx.size().to_rect();
-                                if shared.tag_filter.is_some() &&
-                                    shared.tag_filter.as_ref().unwrap().eq(id) {
-                                        ctx.fill(bounds, &TASK_COLOR_BG);
-                                    }
-                                else {
-                                    ctx.stroke(bounds, &TASK_COLOR_BG, 2.0);
-                                }
-                            })
-                        )
-                )
-                    .on_click(|_ctx, (data, what): &mut (AppModel, String), _env| {
-                        data.tag_filter = match data.tag_filter {
-                            Some(ref filter) if filter.eq(what) => None,
-                            Some(_)                             => Some(what.clone()),
-                            None                                => Some(what.clone())
-                        };
-
-                        data.check_update_selected();
-                    })
-            })
-                .with_spacing(10.0)
-                .padding((0.0, 0.0, 15.0, 0.0)))
-        .vertical()
-        .lens(lens::Identity.map(
-            // Expose shared data with children data
-            |d: &AppModel| (d.clone(), d.tags.iter().map(|x : &String| {x.clone()}).collect()),
-            |d: &mut AppModel, x: (AppModel, Vector<String>)| {
-                // If shared data was changed reflect the changes in our AppModel
-                *d = x.0
-            },
-        )),
-        1.0
-    );
-
-    main_row.add_child(focus_column.padding(10.0));
-    main_row.add_default_spacer();
-
-    let task_list_widget = TaskListWidget::new()
-        .lens(lens::Identity.map(
-            // Expose shared data with children data
-            |d: &AppModel| (d.clone(), d.get_uids_filtered()),
-            |d: &mut AppModel, x: (AppModel, Vector<String>)| {
-                // If shared data was changed reflect the changes in our AppModel
-                *d = x.0
-            },
-        ));
-
-    // Build a list with shared data
-    tasks_column.add_flex_child(task_list_widget, 2.0);
-
-    tasks_column.add_spacer(10.0);
-
-    tasks_column.add_child(
-        Maybe::new(
-            || task_edit_widget().boxed(),
-            || SizedBox::empty().expand_width().boxed(),
-        )
-            .lens(lens::Identity.map(
-                // Expose shared data with children data
-                |d: &AppModel|
-                match d.get_task(&d.selected_task)
-                {
-                    Some(task) => Some((task.clone(), d.show_task_edit)),
-                    _ => None,
-                },
-
-                |d: &mut AppModel, x: Option<(Task, bool)>| {
-                    if let Some((mut new_task, vis)) = x {
-                        d.show_task_edit = vis;
-
-                        if let Some(prev) = d.get_task(&d.selected_task) {
-                            if !prev.same(&new_task) {
-
-                                if let Err(what) = db::update_task(d.db.clone(), &new_task) {
-                                    println!("db error: {}", what);
-                                }
-
-                                new_task.seq += 1;
-
-                                let mut deleted_filter = None;
-
-                                if let Some(ref filt) = d.tag_filter {
-                                    if !new_task.tags.contains(filt) {
-                                        deleted_filter = Some(filt.clone());
-                                    }
-                                }
-
-                                d.tasks = d.tasks.update(d.selected_task.as_ref().unwrap().clone(),
-                                                         new_task);
-                                d.update_tags();
-
-                                // if currently select tag filter is missing
-                                // from updated task and this tag isn't
-                                // present anymore in other tags then clear
-                                // tag filter
-
-                                if let Some(ref filt) = deleted_filter {
-                                    if !d.tags.contains(filt) {
-                                        d.tag_filter = None;
-                                    }
-                                }
-
-                                d.check_update_selected();
-                            }
-                        }
-                    }
-                },
-            )),
-    );
-
-    tasks_column.add_spacer(15.0);
-
-    tasks_column.add_flex_child(
-        Maybe::new(
-            || task_summary_widget().boxed(),
-            || SizedBox::empty().expand_width().boxed(),
-        )
-            .lens(lens::Identity.map(
-                // Expose shared data with children data
-                |d: &AppModel|
-                match (d.get_task(&d.selected_task),
-                       d.get_task_sum(&d.selected_task).unwrap_or(&TimePrefixSum::new()))
-                {
-                    (Some(task), time) => Some(((task.clone(), TaskViewState{skip_days: 0}, time.clone()), d.show_task_summary)),
-                    _ => None,
-                },
-
-                |d: &mut AppModel, x: Option<((Task, TaskViewState, TimePrefixSum), bool)>| {
-                    if let Some(((_, _ , _), vis)) = x {
-                        d.show_task_summary = vis;
-                    }
-                },
-            )),
-    3.0);
-
-    main_row.add_flex_child(tasks_column
-                            .padding(10.0)
-                            .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0),
-                            2.0);
-
-    let mut time_column = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
-
-    time_column.add_child(Label::new("Total time log")
-                          .with_font(FONT_CAPTION_DESCR.clone())
-                          .padding(10.0));
-
-    time_column.add_child(
-        widgets::duration_widget()
-            .lens(lens::Identity.map(
-                |model: &AppModel| Rc::new(time::get_durations(&model.task_sums)),
-                |_, _ | {},
-        )));
-
-    time_column.add_default_spacer();
-
-    time_column.add_child(Label::new("Activity log").with_font(FONT_CAPTION_DESCR.clone()).padding(10.0));
-
-    time_column.add_flex_child(
-        Scroll::new(ActivityLogWidget::new())
-            .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0), 1.0);
-
-    main_row.add_child(time_column);
-
-    root.add_flex_child(main_row, 1.0);
-
-    // bottom row 
-    // root.add_child(
-    //     Button::new("Save")
-    //         .on_click(|_ctx, (model): &mut (AppModel), _env| {
-    //             // todo dont clone IcalCalendar
-    //             // let newcal = update_ical(&mut IcalCalendar::clone(&model.cal), &model.tasks);
-    //             // emit(&newcal);
-    //             // model.cal = Rc::new(newcal)
-    //         })
-    //         .fix_size(120.0, 20.0)
-    //         .align_vertical(UnitPoint::CENTER),
-    // );
-
-    root.with_child(Container::new(StatusBar::new()
-                                   .align_horizontal(UnitPoint::CENTER))
-                    .border(KeyOrValue::Concrete(APP_BORDER.clone()), 1.0),
-    )
-        // .debug_paint_layout()
 }
 
