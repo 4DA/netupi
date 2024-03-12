@@ -64,17 +64,69 @@ fn get_last_task(tasks: &TaskMap, records: &TimeRecordMap) -> Option<String>
     return None;
 }
 
-struct TodoItem {
-    todo: String,
-}
+// struct StatusItem {
+//     status: TaskStatus
+// }
 
-struct StatefulList {
+struct StatusList {
     state: ListState,
-    items: Vec<TodoItem>,
+    items: Vec<FocusFilter>,
     last_selected: Option<usize>,
 }
 
-impl StatefulList {
+struct TaskItem {
+    todo: String,
+}
+
+struct TaskList {
+    state: ListState,
+    items: Vec<TaskItem>,
+    last_selected: Option<usize>,
+}
+
+impl StatusList {
+    fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => self.last_selected.unwrap_or(0),
+        };
+        self.state.select(Some(i));
+    }
+
+    fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => self.last_selected.unwrap_or(0),
+        };
+        self.state.select(Some(i));
+    }
+
+    fn new() -> Self {
+        let mut state = ListState::default();
+        state.select(Some(0));
+
+        let items = vec![FocusFilter::Status(TaskStatus::NeedsAction),
+                         FocusFilter::Status(TaskStatus::InProcess),
+                         FocusFilter::Status(TaskStatus::Completed),
+                         FocusFilter::All];
+
+        Self{state, items, last_selected: Some(0)}
+    }
+}
+
+impl TaskList {
     fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
@@ -104,7 +156,12 @@ impl StatefulList {
     }
 }
 
-impl TodoItem {
+fn filter_to_list_item(filter: &FocusFilter, index: usize) -> ListItem {
+    let line = filter.to_string();
+    ListItem::new(line).bg(NORMAL_ROW_COLOR)
+}
+
+impl TaskItem {
     fn to_list_item(&self, index: usize) -> ListItem {
         let bg_color = match index % 2 {
             0 => NORMAL_ROW_COLOR,
@@ -116,9 +173,17 @@ impl TodoItem {
     }
 }
 
+#[derive(PartialEq)]
+enum ActiveWidget {
+    TaskWidget,
+    FocusWidget
+}
+
 struct App {
     model: AppModel,
-    items: StatefulList
+    task_list: TaskList,
+    filter_list: StatusList,
+    active_widget: ActiveWidget
 }
 
 impl App {
@@ -128,14 +193,37 @@ impl App {
 
         let items = model.tasks.iter().map(|t|
             {
-                TodoItem{todo: t.1.name.clone()}
+                TaskItem{todo: t.1.name.clone()}
             }).collect();
 
         let last_selected = None;
 
-        let mut items = StatefulList{state, items, last_selected};
-        return App{model, items};
+        let mut task_list = TaskList{state, items, last_selected};
+        let filter_list = StatusList::new();
+
+        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget};
     }
+
+    fn keymap_task_list(&mut self, key: event::KeyCode) {
+        use KeyCode::*;
+        match key {
+            Char('j') | Down => self.task_list.next(),
+            Char('k') | Up => self.task_list.previous(),
+            _ => {}
+        }
+    }
+
+    fn keymap_filter_list(&mut self, key: event::KeyCode) {
+        use KeyCode::*;
+        match key {
+            Char('j') | Down => self.filter_list.next(),
+            Char('k') | Up => self.filter_list.previous(),
+            _ => {}
+        }
+    }
+
+    // TODO: use messages
+    // https://ratatui.rs/concepts/application-patterns/the-elm-architecture/
 
     fn run(&mut self, mut terminal: Terminal<impl Backend>) -> io::Result<()> {
 
@@ -147,9 +235,12 @@ impl App {
                     use KeyCode::*;
                     match key.code {
                         Char('q') | Esc => return Ok(()),
-                        Char('j') | Down => self.items.next(),
-                        Char('k') | Up => self.items.previous(),
-                        _ => {}
+                        Left => self.active_widget = ActiveWidget::FocusWidget,
+                        Right => self.active_widget = ActiveWidget::TaskWidget,
+                        _ => match self.active_widget {
+                            ActiveWidget::TaskWidget => self.keymap_task_list(key.code),
+                            ActiveWidget::FocusWidget => self.keymap_filter_list(key.code),
+                        }
                     }
                 }
             }
@@ -162,14 +253,66 @@ impl App {
         Ok(())
     }
 
-    fn render_todo(&mut self, area: Rect, buf: &mut Buffer) {
+    fn render_main_widget(&mut self, area: Rect, buf: &mut Buffer) {
+
+        let horizontal = Layout::horizontal([
+            Constraint::Length(20),
+            Constraint::Min(0),
+            Constraint::Length(20),
+        ]);
+
+        let [focus_area, tasks_area, stats_area] = horizontal.areas(area);
+
+        self.render_focus(focus_area, buf);
+        self.render_task_list(tasks_area, buf);
+    }
+
+    fn render_focus(&mut self, area: Rect, buf: &mut Buffer) {
+
+        let outer_block = Block::default()
+            .borders(if self.active_widget == ActiveWidget::FocusWidget {Borders::all()} else {Borders::NONE})
+            .padding(if self.active_widget != ActiveWidget::FocusWidget {Padding::symmetric(1, 0)} else {Padding::uniform(0)})
+            .fg(TEXT_COLOR)
+            .bg(TODO_HEADER_BG)
+            .title("Focus")
+            .title_alignment(Alignment::Center);
+
+        let inner_block = Block::default()
+            .borders(Borders::NONE)
+            .fg(TEXT_COLOR)
+            .bg(NORMAL_ROW_COLOR);
+
+        let outer_area = area;
+        let inner_area = outer_block.inner(outer_area);
+
+        outer_block.render(outer_area, buf);
+
+        let items: Vec<ListItem> = self.filter_list.items.iter().map(|x| filter_to_list_item(x, 0)).collect();
+
+        let items = List::new(items)
+            .block(inner_block)
+            .highlight_style(
+                Style::default()
+                    .add_modifier(Modifier::BOLD)
+                    .add_modifier(Modifier::REVERSED)
+                    .fg(SELECTED_STYLE_FG),
+            )
+            .highlight_symbol(">")
+            .highlight_spacing(HighlightSpacing::Always);
+
+        StatefulWidget::render(items, inner_area, buf, &mut self.filter_list.state);
+    }
+
+    fn render_task_list(&mut self, area: Rect, buf: &mut Buffer) {
         // We create two blocks, one is for the header (outer) and the other is for list (inner).
         let outer_block = Block::default()
-            .borders(Borders::NONE)
+            .borders(if self.active_widget == ActiveWidget::TaskWidget {Borders::all()} else {Borders::NONE})
+            .padding(if self.active_widget != ActiveWidget::TaskWidget {Padding::symmetric(1, 0)} else {Padding::uniform(0)})
             .fg(TEXT_COLOR)
             .bg(TODO_HEADER_BG)
             .title("Task list")
             .title_alignment(Alignment::Center);
+
         let inner_block = Block::default()
             .borders(Borders::NONE)
             .fg(TEXT_COLOR)
@@ -184,7 +327,7 @@ impl App {
 
         // Iterate through all elements in the `items` and stylize them.
         let items: Vec<ListItem> = self
-            .items
+            .task_list
             .items
             .iter()
             .enumerate()
@@ -206,7 +349,7 @@ impl App {
         // We can now render the item list
         // (look careful we are using StatefulWidget's render.)
         // ratatui::widgets::StatefulWidget::render as stateful_render
-        StatefulWidget::render(items, inner_area, buf, &mut self.items.state);
+        StatefulWidget::render(items, inner_area, buf, &mut self.task_list.state);
     }
 }
 
@@ -242,7 +385,7 @@ impl Widget for &mut App {
         let [upper_item_list_area, lower_item_list_area] = vertical.areas(rest_area);
 
         render_title(header_area, buf);
-        self.render_todo(upper_item_list_area, buf);
+        self.render_main_widget(upper_item_list_area, buf);
         render_footer(&self.model, footer_area, buf);
     }
 }
@@ -350,7 +493,7 @@ fn get_status_string(d: &AppModel) -> String {
                     time::format_duration(&get_work_interval(d, uid)))
         },
 
-        _ => format!("")
+        _ => format!("STATUS TEXT")
     }
 
 }
