@@ -28,6 +28,39 @@ impl FocusFilter {
             FocusFilter::All => "All",
         }
     }
+
+    pub fn to_int(&self) -> u8 {
+        use FocusFilter::*;
+        match &self {
+            Status(TaskStatus::NeedsAction) => 0,
+            Status(TaskStatus::Completed) => 1,
+            Status(TaskStatus::InProcess) => 2,
+            Status(TaskStatus::Archived) => 3,
+            All => 4,
+        }
+    }
+
+    pub fn cycle_next(&self) -> Self {
+        use FocusFilter::*;
+        match self {
+            Status(TaskStatus::NeedsAction) => Status(TaskStatus::Completed),
+            Status(TaskStatus::Completed) => Status(TaskStatus::InProcess),
+            Status(TaskStatus::InProcess) => Status(TaskStatus::Archived),
+            Status(TaskStatus::Archived) => All,
+            All => Status(TaskStatus::NeedsAction)
+        }
+    }
+
+    pub fn cycle_prev(&self) -> Self {
+        use FocusFilter::*;
+        match self {
+            Status(TaskStatus::NeedsAction) => All,
+            Status(TaskStatus::Completed) => Status(TaskStatus::NeedsAction),
+            Status(TaskStatus::InProcess) => Status(TaskStatus::Completed),
+            Status(TaskStatus::Archived) => Status(TaskStatus::InProcess),
+            All => Status(TaskStatus::Archived)
+        }
+    }
 }
 
 #[derive(Debug, Clone, Data)]

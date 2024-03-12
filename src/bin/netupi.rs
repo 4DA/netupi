@@ -71,11 +71,11 @@ fn get_last_task(tasks: &TaskMap, records: &TimeRecordMap) -> Option<String>
 struct StatusList {
     state: ListState,
     items: Vec<FocusFilter>,
-    last_selected: Option<usize>,
 }
 
 struct TaskItem {
-    todo: String,
+    uid: String,
+    name: String
 }
 
 struct TaskList {
@@ -85,44 +85,21 @@ struct TaskList {
 }
 
 impl StatusList {
-    fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.items.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => self.last_selected.unwrap_or(0),
-        };
-        self.state.select(Some(i));
+    fn update(&mut self, filter: &FocusFilter) {
+        self.state.select(Some(filter.to_int() as usize));
     }
 
-    fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.items.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => self.last_selected.unwrap_or(0),
-        };
-        self.state.select(Some(i));
-    }
-
-    fn new() -> Self {
+    fn new(filter: &FocusFilter) -> Self {
         let mut state = ListState::default();
-        state.select(Some(0));
+        state.select(Some(filter.to_int() as usize));
 
         let items = vec![FocusFilter::Status(TaskStatus::NeedsAction),
-                         FocusFilter::Status(TaskStatus::InProcess),
                          FocusFilter::Status(TaskStatus::Completed),
+                         FocusFilter::Status(TaskStatus::InProcess),
+                         FocusFilter::Status(TaskStatus::Archived),
                          FocusFilter::All];
 
-        Self{state, items, last_selected: Some(0)}
+        Self{state, items}
     }
 }
 
@@ -167,10 +144,20 @@ impl TaskItem {
             0 => NORMAL_ROW_COLOR,
             _ => ALT_ROW_COLOR,
         };
-        let line = format!(" ✓ {}", self.todo);
+        let line = format!(" ✓ {}", self.name);
 
         ListItem::new(line).bg(bg_color)
     }
+}
+
+fn task_to_list_item(task: &Task, index: usize) -> ListItem {
+    let bg_color = match index % 2 {
+        0 => NORMAL_ROW_COLOR,
+        _ => ALT_ROW_COLOR,
+    };
+    let line = format!("{}", task.name);
+
+    ListItem::new(line).bg(bg_color)
 }
 
 #[derive(PartialEq)]
@@ -193,13 +180,13 @@ impl App {
 
         let items = model.tasks.iter().map(|t|
             {
-                TaskItem{todo: t.1.name.clone()}
+                TaskItem{uid: t.1.uid.clone(), name: t.1.name.clone()}
             }).collect();
 
         let last_selected = None;
 
         let mut task_list = TaskList{state, items, last_selected};
-        let filter_list = StatusList::new();
+        let filter_list = StatusList::new(&model.focus_filter);
 
         return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget};
     }
@@ -216,8 +203,11 @@ impl App {
     fn keymap_filter_list(&mut self, key: event::KeyCode) {
         use KeyCode::*;
         match key {
-            Char('j') | Down => self.filter_list.next(),
-            Char('k') | Up => self.filter_list.previous(),
+            Char('j') | Down => {self.model.focus_filter = self.model.focus_filter.cycle_next();
+                                 self.filter_list.update(&self.model.focus_filter);}
+
+            Char('k') | Up => {self.model.focus_filter = self.model.focus_filter.cycle_prev();
+                               self.filter_list.update(&self.model.focus_filter);}
             _ => {}
         }
     }
@@ -325,13 +315,12 @@ impl App {
         // We can render the header in outer_area.
         outer_block.render(outer_area, buf);
 
-        // Iterate through all elements in the `items` and stylize them.
-        let items: Vec<ListItem> = self
-            .task_list
-            .items
+        let tasks = self.model.get_tasks_filtered();
+
+        let items: Vec<ListItem> = tasks
             .iter()
             .enumerate()
-            .map(|(i, todo_item)| todo_item.to_list_item(i))
+            .map(|(i, t)| task_to_list_item(&t, i))
             .collect();
 
         // Create a List from all list items and highlight the currently selected one
@@ -460,6 +449,8 @@ pub fn main() -> anyhow::Result<()> {
 }
 
 fn get_status_string(d: &AppModel) -> String {
+    return d.focus_filter.to_string().into();
+
     match d.tracking.state {
         TrackingState::Active(ref uid) => {
             let active_task = &d.tasks.get(uid).expect("unknown uid");
