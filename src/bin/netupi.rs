@@ -74,7 +74,7 @@ struct StatusList {
 }
 
 struct TaskItem {
-    uid: String,
+    uid: TaskID,
     name: String
 }
 
@@ -104,7 +104,7 @@ impl StatusList {
 }
 
 impl TaskList {
-    fn next(&mut self) {
+    fn next(&mut self) -> Option<TaskID> {
         let i = match self.state.selected() {
             Some(i) => {
                 if i >= self.items.len() - 1 {
@@ -115,10 +115,13 @@ impl TaskList {
             }
             None => self.last_selected.unwrap_or(0),
         };
+
         self.state.select(Some(i));
+
+        return Some(self.items[i].uid.clone());
     }
 
-    fn previous(&mut self) {
+    fn previous(&mut self) -> Option<TaskID> {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
@@ -129,7 +132,10 @@ impl TaskList {
             }
             None => self.last_selected.unwrap_or(0),
         };
+
         self.state.select(Some(i));
+
+        return Some(self.items[i].uid.clone());
     }
 }
 
@@ -178,10 +184,12 @@ impl App {
 
         let state = ListState::default();
 
-        let items = model.tasks.iter().map(|t|
-            {
-                TaskItem{uid: t.1.uid.clone(), name: t.1.name.clone()}
-            }).collect();
+        let tasks = model.get_tasks_filtered();
+
+        let items = tasks
+            .iter()
+            .map(|t| TaskItem{uid: t.uid.clone(), name: t.name.clone()})
+            .collect();
 
         let last_selected = None;
 
@@ -191,11 +199,20 @@ impl App {
         return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget};
     }
 
+    fn update_task_list(&mut self) {
+        let tasks = self.model.get_tasks_filtered();
+
+        self.task_list.items = tasks
+            .iter()
+            .map(|t| TaskItem{uid: t.uid.clone(), name: t.name.clone()})
+            .collect();
+    }
+
     fn keymap_task_list(&mut self, key: event::KeyCode) {
         use KeyCode::*;
         match key {
-            Char('j') | Down => self.task_list.next(),
-            Char('k') | Up => self.task_list.previous(),
+            Char('j') | Down => self.model.selected_task = self.task_list.next(),
+            Char('k') | Up => self.model.selected_task = self.task_list.previous(),
             _ => {}
         }
     }
@@ -203,11 +220,17 @@ impl App {
     fn keymap_filter_list(&mut self, key: event::KeyCode) {
         use KeyCode::*;
         match key {
-            Char('j') | Down => {self.model.focus_filter = self.model.focus_filter.cycle_next();
-                                 self.filter_list.update(&self.model.focus_filter);}
+            Char('j') | Down => {
+                self.model.focus_filter = self.model.focus_filter.cycle_next();
+                self.filter_list.update(&self.model.focus_filter);
+                self.update_task_list();
+            }
 
-            Char('k') | Up => {self.model.focus_filter = self.model.focus_filter.cycle_prev();
-                               self.filter_list.update(&self.model.focus_filter);}
+            Char('k') | Up => {
+                self.model.focus_filter = self.model.focus_filter.cycle_prev();
+                self.filter_list.update(&self.model.focus_filter);
+                self.update_task_list();
+            }
             _ => {}
         }
     }
@@ -251,10 +274,18 @@ impl App {
             Constraint::Length(20),
         ]);
 
-        let [focus_area, tasks_area, stats_area] = horizontal.areas(area);
+        let vertical = Layout::vertical([
+            Constraint::Min(20),
+            Constraint::Min(20),
+        ]);
+
+        let [focus_area, center_area, stats_area] = horizontal.areas(area);
+        let [task_list_area, task_stats_area] = vertical.areas(center_area);
 
         self.render_focus(focus_area, buf);
-        self.render_task_list(tasks_area, buf);
+
+        self.render_task_list(task_list_area, buf);
+        self.render_task_stats(task_stats_area, buf);
     }
 
     fn render_focus(&mut self, area: Rect, buf: &mut Buffer) {
@@ -340,6 +371,60 @@ impl App {
         // ratatui::widgets::StatefulWidget::render as stateful_render
         StatefulWidget::render(items, inner_area, buf, &mut self.task_list.state);
     }
+
+    fn render_task_stats(&mut self, area: Rect, buf: &mut Buffer) {
+        let outer_info_block = Block::default()
+            .borders(Borders::NONE)
+            .fg(TEXT_COLOR)
+            .bg(TODO_HEADER_BG)
+            .title("Task stats")
+            .title_alignment(Alignment::Center);
+
+        let left_block = Block::default()
+            .borders(Borders::NONE)
+            .bg(NORMAL_ROW_COLOR)
+            .padding(Padding::horizontal(1));
+
+        let inner_info_block = Block::default()
+            .borders(Borders::NONE)
+            .bg(NORMAL_ROW_COLOR)
+            .padding(Padding::horizontal(1));
+
+        // This is a similar process to what we did for list. outer_info_area will be used for
+        // header inner_info_area will be used for the list info.
+        let outer_info_area = area;
+        let inner_info_area = outer_info_block.inner(outer_info_area);
+
+        // We can render the header. Inner info will be rendered later
+        outer_info_block.render(outer_info_area, buf);
+
+        let agg = time::get_duration(&self.model.task_sums.get(&self.model.selected_task.clone().unwrap()).unwrap(), &Local::now());
+        let durations = widgets::get_task_durations(&agg);
+
+        let captions:String = "Today\nWeek\nMonth\nYear\nAll time".into();
+
+        let horizontal = Layout::horizontal([
+            Constraint::Min(20),
+            Constraint::Min(20),
+        ]);
+
+        let [left_area, right_area] = horizontal.areas(inner_info_area);
+
+        let captions_paragraph = Paragraph::new(captions)
+            .block(left_block)
+            .fg(TEXT_COLOR)
+            .wrap(Wrap { trim: false });
+
+        let info_paragraph = Paragraph::new(durations)
+            .block(inner_info_block)
+            .fg(TEXT_COLOR)
+            .wrap(Wrap { trim: false });
+
+        // We can now render the item info
+        captions_paragraph.render(left_area, buf);
+        info_paragraph.render(right_area, buf);
+    }
+
 }
 
     fn render_title(area: Rect, buf: &mut Buffer) {
@@ -449,7 +534,8 @@ pub fn main() -> anyhow::Result<()> {
 }
 
 fn get_status_string(d: &AppModel) -> String {
-    return d.focus_filter.to_string().into();
+    // return d.focus_filter.to_string().into();
+    return d.selected_task.clone().unwrap().to_string().into();
 
     match d.tracking.state {
         TrackingState::Active(ref uid) => {
@@ -488,4 +574,3 @@ fn get_status_string(d: &AppModel) -> String {
     }
 
 }
-

@@ -14,12 +14,13 @@ use serde::ser::{SerializeSeq};
 use uuid::v1::{Timestamp, Context};
 use uuid::Uuid;
 
-pub type TagSet        = OrdSet<String>;
-pub type TaskMap       = OrdMap<String, Task>;
+pub type TaskID        = String;
+pub type TagSet        = OrdSet<TaskID>;
+pub type TaskMap       = OrdMap<TaskID, Task>;
 pub type TimeRecordMap = OrdMap<DateTime<Utc>, TimeRecord>;
 pub type TimeRecordSet = OrdSet<DateTime<Utc>>;
 pub type TimePrefixSum = OrdMap<DateTime<Utc>, TimePrefix>;
-pub type TaskSums      = OrdMap::<String, TimePrefixSum>;
+pub type TaskSums      = OrdMap::<TaskID, TimePrefixSum>;
 
 #[derive(Debug, Clone, Data, PartialEq, Serialize, Deserialize, Eq)]
 pub enum TaskStatus {
@@ -79,7 +80,7 @@ pub struct TaskViewState {
 
 #[derive(Debug, Clone, Data, Lens, Eq)]
 pub struct Task {
-    pub uid: String,
+    pub uid: TaskID,
     pub seq: u32,
     pub name: String,
     pub description: String,
