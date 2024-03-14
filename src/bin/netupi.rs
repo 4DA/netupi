@@ -182,13 +182,16 @@ struct App {
 impl App {
     fn new(model: AppModel) -> App {
 
-        let state = ListState::default();
+        let mut state = ListState::default();
 
         let tasks = model.get_tasks_filtered();
 
         let items = tasks
             .iter()
-            .map(|t| TaskItem{uid: t.uid.clone(), name: t.name.clone()})
+            .enumerate()
+            .map(|(i, t)| {
+                model.selected_task.as_ref().map(|val| if val.eq(&t.uid) {state.select(Some(i))});
+                TaskItem{uid: t.uid.clone(), name: t.name.clone()}})
             .collect();
 
         let last_selected = None;
@@ -390,6 +393,11 @@ impl App {
             .bg(NORMAL_ROW_COLOR)
             .padding(Padding::horizontal(1));
 
+        let retro_block = Block::default()
+            .borders(Borders::NONE)
+            .bg(NORMAL_ROW_COLOR)
+            .padding(Padding::horizontal(1));
+
         // This is a similar process to what we did for list. outer_info_area will be used for
         // header inner_info_area will be used for the list info.
         let outer_info_area = area;
@@ -398,17 +406,20 @@ impl App {
         // We can render the header. Inner info will be rendered later
         outer_info_block.render(outer_info_area, buf);
 
-        let agg = time::get_duration(&self.model.task_sums.get(&self.model.selected_task.clone().unwrap()).unwrap(), &Local::now());
+        // TODO handle non selected case here
+        let task_sum = &self.model.task_sums.get(&self.model.selected_task.clone().unwrap()).unwrap();
+        let agg = time::get_duration(&task_sum, &Local::now());
         let durations = widgets::get_task_durations(&agg);
 
         let captions:String = "Today\nWeek\nMonth\nYear\nAll time".into();
 
         let horizontal = Layout::horizontal([
+            Constraint::Length(15),
             Constraint::Min(20),
             Constraint::Min(20),
         ]);
 
-        let [left_area, right_area] = horizontal.areas(inner_info_area);
+        let [left_area, right_area, retro_area] = horizontal.areas(inner_info_area);
 
         let captions_paragraph = Paragraph::new(captions)
             .block(left_block)
@@ -420,11 +431,26 @@ impl App {
             .fg(TEXT_COLOR)
             .wrap(Wrap { trim: false });
 
-        // We can now render the item info
+
         captions_paragraph.render(left_area, buf);
         info_paragraph.render(right_area, buf);
-    }
 
+        // render retrospective
+        // --
+        let mut retro: String = String::new();
+
+        for i in 0..28 {
+            retro.push_str(&get_day_time2(task_sum, i));
+            retro.push_str("\n");
+        }
+
+        let retro_paragraph = Paragraph::new(retro)
+            .block(retro_block)
+            .fg(TEXT_COLOR)
+            .wrap(Wrap { trim: false });
+
+        retro_paragraph.render(retro_area, buf);
+    }
 }
 
     fn render_title(area: Rect, buf: &mut Buffer) {
