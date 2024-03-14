@@ -38,7 +38,7 @@ impl LogEntryController {
     const CMD_COLD: Selector = Selector::new("alog_entry_cold");
 }
 
-fn format_time_record(task: &Task, record: &TimeRecord) -> String {
+pub fn format_time_record(task: &Task, record: &TimeRecord) -> String {
     let name =  format!("{:wid$}", task.name, wid = 11);
 
     let duration = time::format_duration(

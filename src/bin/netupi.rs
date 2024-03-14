@@ -274,7 +274,7 @@ impl App {
         let horizontal = Layout::horizontal([
             Constraint::Length(20),
             Constraint::Min(0),
-            Constraint::Length(20),
+            Constraint::Length(45),
         ]);
 
         let vertical = Layout::vertical([
@@ -282,13 +282,15 @@ impl App {
             Constraint::Min(20),
         ]);
 
-        let [focus_area, center_area, stats_area] = horizontal.areas(area);
+        let [focus_area, center_area, activity_log_area] = horizontal.areas(area);
         let [task_list_area, task_stats_area] = vertical.areas(center_area);
 
         self.render_focus(focus_area, buf);
 
         self.render_task_list(task_list_area, buf);
         self.render_task_stats(task_stats_area, buf);
+
+        self.render_activity_log(activity_log_area, buf);
     }
 
     fn render_focus(&mut self, area: Rect, buf: &mut Buffer) {
@@ -416,7 +418,7 @@ impl App {
         let horizontal = Layout::horizontal([
             Constraint::Length(15),
             Constraint::Min(20),
-            Constraint::Min(20),
+            Constraint::Min(30),
         ]);
 
         let [left_area, right_area, retro_area] = horizontal.areas(inner_info_area);
@@ -450,6 +452,41 @@ impl App {
             .wrap(Wrap { trim: false });
 
         retro_paragraph.render(retro_area, buf);
+    }
+
+    fn render_activity_log(&mut self, area: Rect, buf: &mut Buffer) {
+        let outer_info_block = Block::default()
+            .borders(Borders::NONE)
+            .fg(TEXT_COLOR)
+            .bg(TODO_HEADER_BG)
+            .title("Activity log")
+            .title_alignment(Alignment::Center);
+
+        let inner_info_block = Block::default()
+            .borders(Borders::NONE)
+            .bg(NORMAL_ROW_COLOR)
+            .padding(Padding::horizontal(1));
+
+        let outer_info_area = area;
+        let inner_info_area = outer_info_block.inner(outer_info_area);
+
+        outer_info_block.render(outer_info_area, buf);
+
+        let mut log_strings:String = String::new();
+
+        for rec in self.model.records.iter().rev() {
+            if let Some(task) = self.model.tasks.get(&rec.1.uid) {
+                log_strings.push_str(&format_time_record(task, &rec.1));
+                log_strings.push_str("\n");
+            }
+        }
+
+        let log_paragraph = Paragraph::new(log_strings)
+            .block(inner_info_block)
+            .fg(TEXT_COLOR)
+            .wrap(Wrap { trim: false });
+
+        log_paragraph.render(inner_info_area, buf);
     }
 }
 
