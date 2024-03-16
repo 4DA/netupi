@@ -105,6 +105,8 @@ impl StatusList {
 
 impl TaskList {
     fn next(&mut self) -> Option<TaskID> {
+        if self.items.is_empty() {return None;}
+
         let i = match self.state.selected() {
             Some(i) => {
                 if i >= self.items.len() - 1 {
@@ -122,6 +124,8 @@ impl TaskList {
     }
 
     fn previous(&mut self) -> Option<TaskID> {
+        if self.items.is_empty() {return None;}
+
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
@@ -205,10 +209,18 @@ impl App {
     fn update_task_list(&mut self) {
         let tasks = self.model.get_tasks_filtered();
 
+        let mut selected_id = None;
+
         self.task_list.items = tasks
             .iter()
-            .map(|t| TaskItem{uid: t.uid.clone(), name: t.name.clone()})
+            .enumerate()
+            .map(|(i, t)| {
+                if let Some(sel) = &self.model.selected_task {if sel.eq(&t.uid) {selected_id = Some(i)}};
+                TaskItem{uid: t.uid.clone(), name: t.name.clone()}
+            })
             .collect();
+
+        self.task_list.state.select(selected_id);
     }
 
     fn keymap_task_list(&mut self, key: event::KeyCode) {
@@ -282,14 +294,24 @@ impl App {
             Constraint::Min(20),
         ]);
 
-        let [focus_area, center_area, activity_log_area] = horizontal.areas(area);
+        let right_vertical = Layout::vertical([
+            Constraint::Length(8),
+            Constraint::Min(20),
+        ]);
+
+        let [focus_area, center_area, right_area] = horizontal.areas(area);
         let [task_list_area, task_stats_area] = vertical.areas(center_area);
+        let [total_time_log_area, activity_log_area] = right_vertical.areas(right_area);
 
         self.render_focus(focus_area, buf);
 
         self.render_task_list(task_list_area, buf);
-        self.render_task_stats(task_stats_area, buf);
 
+        if self.model.selected_task.is_some() {
+            self.render_task_stats(task_stats_area, buf);
+        }
+
+        self.render_total_time_log(total_time_log_area, buf);
         self.render_activity_log(activity_log_area, buf);
     }
 
@@ -454,6 +476,60 @@ impl App {
         retro_paragraph.render(retro_area, buf);
     }
 
+    fn render_total_time_log(&mut self, area: Rect, buf: &mut Buffer) {
+
+        let outer_info_block = Block::default()
+            .borders(Borders::NONE)
+            .fg(TEXT_COLOR)
+            .bg(TODO_HEADER_BG)
+            .title("Total time log")
+            .title_alignment(Alignment::Center);
+
+        let inner_info_block = Block::default()
+            .borders(Borders::NONE)
+            .bg(NORMAL_ROW_COLOR)
+            .padding(Padding::horizontal(1));
+
+        let left_block = Block::default()
+            .borders(Borders::NONE)
+            .bg(NORMAL_ROW_COLOR)
+            .padding(Padding::horizontal(1));
+
+        let right_block = Block::default()
+            .borders(Borders::NONE)
+            .bg(NORMAL_ROW_COLOR)
+            .padding(Padding::horizontal(1));
+
+        let outer_info_area = area;
+        let inner_info_area = outer_info_block.inner(outer_info_area);
+
+        outer_info_block.render(outer_info_area, buf);
+
+        let captions:String = "Today\nWeek\nMonth\nYear\nAll time".into();
+        let agg = time::get_durations(&self.model.task_sums);
+        let durations = widgets::get_task_durations(&agg);
+
+        let horizontal = Layout::horizontal([
+            Constraint::Length(15),
+            Constraint::Min(20),
+        ]);
+
+        let [left_area, right_area] = horizontal.areas(inner_info_area);
+
+        let captions_paragraph = Paragraph::new(captions)
+            .block(left_block)
+            .fg(TEXT_COLOR)
+            .wrap(Wrap { trim: false });
+
+        let durations_paragraph = Paragraph::new(durations)
+            .block(right_block)
+            .fg(TEXT_COLOR)
+            .wrap(Wrap { trim: false });
+
+        captions_paragraph.render(left_area, buf);
+        durations_paragraph.render(right_area, buf);
+    }
+
     fn render_activity_log(&mut self, area: Rect, buf: &mut Buffer) {
         let outer_info_block = Block::default()
             .borders(Borders::NONE)
@@ -597,8 +673,9 @@ pub fn main() -> anyhow::Result<()> {
 }
 
 fn get_status_string(d: &AppModel) -> String {
+    // DEBUG
     // return d.focus_filter.to_string().into();
-    return d.selected_task.clone().unwrap().to_string().into();
+    // return d.selected_task.clone().unwrap().to_string().into();
 
     match d.tracking.state {
         TrackingState::Active(ref uid) => {
