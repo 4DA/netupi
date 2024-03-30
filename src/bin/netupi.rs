@@ -47,7 +47,7 @@ struct Args {
 
 fn get_db_path(args: &Args) -> PathBuf {
     let mut default_config_dir = dirs::config_dir().unwrap_or(PathBuf::new());
-    default_config_dir.push("netupi");
+    default_config_dir.push("netupi-dev");
     args.config_dir.clone().unwrap_or(default_config_dir)
 }
 
