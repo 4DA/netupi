@@ -73,17 +73,6 @@ struct StatusList {
     items: Vec<FocusFilter>,
 }
 
-struct TaskItem {
-    uid: TaskID,
-    name: String
-}
-
-struct TaskList {
-    state: ListState,
-    items: Vec<TaskItem>,
-    last_selected: Option<usize>,
-}
-
 impl StatusList {
     fn update(&mut self, filter: &FocusFilter) {
         self.state.select(Some(filter.to_int() as usize));
@@ -103,61 +92,9 @@ impl StatusList {
     }
 }
 
-impl TaskList {
-    fn next(&mut self) -> Option<TaskID> {
-        if self.items.is_empty() {return None;}
-
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.items.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => self.last_selected.unwrap_or(0),
-        };
-
-        self.state.select(Some(i));
-
-        return Some(self.items[i].uid.clone());
-    }
-
-    fn previous(&mut self) -> Option<TaskID> {
-        if self.items.is_empty() {return None;}
-
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.items.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => self.last_selected.unwrap_or(0),
-        };
-
-        self.state.select(Some(i));
-
-        return Some(self.items[i].uid.clone());
-    }
-}
-
 fn filter_to_list_item(filter: &FocusFilter, index: usize) -> ListItem {
     let line = filter.to_string();
     ListItem::new(line).bg(NORMAL_ROW_COLOR)
-}
-
-impl TaskItem {
-    fn to_list_item(&self, index: usize) -> ListItem {
-        let bg_color = match index % 2 {
-            0 => NORMAL_ROW_COLOR,
-            _ => ALT_ROW_COLOR,
-        };
-        let line = format!(" ✓ {}", self.name);
-
-        ListItem::new(line).bg(bg_color)
-    }
 }
 
 fn task_to_list_item(task: &Task, index: usize) -> ListItem {
@@ -206,45 +143,19 @@ impl App {
         return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget};
     }
 
-    fn update_task_list(&mut self) {
-        let tasks = self.model.get_tasks_filtered();
-
-        let mut selected_id = None;
-
-        self.task_list.items = tasks
-            .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                if let Some(sel) = &self.model.selected_task {if sel.eq(&t.uid) {selected_id = Some(i)}};
-                TaskItem{uid: t.uid.clone(), name: t.name.clone()}
-            })
-            .collect();
-
-        self.task_list.state.select(selected_id);
-    }
-
-    fn keymap_task_list(&mut self, key: event::KeyCode) {
-        use KeyCode::*;
-        match key {
-            Char('j') | Down => self.model.selected_task = self.task_list.next(),
-            Char('k') | Up => self.model.selected_task = self.task_list.previous(),
-            _ => {}
-        }
-    }
-
     fn keymap_filter_list(&mut self, key: event::KeyCode) {
         use KeyCode::*;
         match key {
             Char('j') | Down => {
                 self.model.focus_filter = self.model.focus_filter.cycle_next();
                 self.filter_list.update(&self.model.focus_filter);
-                self.update_task_list();
+                self.task_list.update(&self.model);
             }
 
             Char('k') | Up => {
                 self.model.focus_filter = self.model.focus_filter.cycle_prev();
                 self.filter_list.update(&self.model.focus_filter);
-                self.update_task_list();
+                self.task_list.update(&self.model);
             }
             _ => {}
         }
@@ -266,7 +177,7 @@ impl App {
                         Left => self.active_widget = ActiveWidget::FocusWidget,
                         Right => self.active_widget = ActiveWidget::TaskWidget,
                         _ => match self.active_widget {
-                            ActiveWidget::TaskWidget => self.keymap_task_list(key.code),
+                            ActiveWidget::TaskWidget => self.task_list.keymap_task_list(&mut self.model, key.code),
                             ActiveWidget::FocusWidget => self.keymap_filter_list(key.code),
                         }
                     }

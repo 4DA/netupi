@@ -14,11 +14,119 @@ use notify_rust::Notification;
 
 use chrono::prelude::*;
 
+use crossterm::{
+    event::{self, KeyCode},
+    ExecutableCommand,
+};
+
+use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
+
 use crate::task::*;
 use crate::app_model::*;
 use crate::common::*;
 use crate::db;
 use crate::utils;
+
+const TODO_HEADER_BG: Color = tailwind::BLUE.c950;
+const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
+const ALT_ROW_COLOR: Color = tailwind::SLATE.c900;
+const SELECTED_STYLE_FG: Color = tailwind::BLUE.c300;
+const TEXT_COLOR: Color = tailwind::SLATE.c200;
+const COMPLETED_TEXT_COLOR: Color = tailwind::GREEN.c500;
+
+pub struct TaskItem {
+    pub uid: TaskID,
+    pub name: String
+}
+
+impl TaskItem {
+    fn to_list_item(&self, index: usize) -> ListItem {
+        let bg_color = match index % 2 {
+            0 => NORMAL_ROW_COLOR,
+            _ => ALT_ROW_COLOR,
+        };
+        let line = format!(" ✓ {}", self.name);
+
+        ListItem::new(line).bg(bg_color)
+    }
+}
+
+pub struct TaskList {
+    pub state: ListState,
+    pub items: Vec<TaskItem>,
+    pub last_selected: Option<usize>,
+}
+
+impl TaskList {
+    fn next(&mut self) -> Option<TaskID> {
+        if self.items.is_empty() {return None;}
+
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => self.last_selected.unwrap_or(0),
+        };
+
+        self.state.select(Some(i));
+
+        return Some(self.items[i].uid.clone());
+    }
+
+    fn previous(&mut self) -> Option<TaskID> {
+        if self.items.is_empty() {return None;}
+
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => self.last_selected.unwrap_or(0),
+        };
+
+        self.state.select(Some(i));
+
+        return Some(self.items[i].uid.clone());
+    }
+
+    pub fn keymap_task_list(&mut self, model: &mut AppModel, key: event::KeyCode) {
+        use KeyCode::*;
+        match key {
+            Char('j') | Down => model.selected_task = self.next(),
+            Char('k') | Up => model.selected_task = self.previous(),
+            // Space => todo!,
+            _ => {}
+        }
+    }
+    
+    pub fn update(&mut self, model: &AppModel) {
+        let tasks = model.get_tasks_filtered();
+
+        let mut selected_id = None;
+
+        self.items = tasks
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                if let Some(sel) = &model.selected_task {
+                    if sel.eq(&t.uid) {selected_id = Some(i)}
+                };
+                TaskItem{uid: t.uid.clone(), name: t.name.clone()}
+            })
+            .collect();
+
+        self.state.select(selected_id);
+    }
+
+}
+
 
 pub struct TaskListWidget {
     inner: WidgetPod<(AppModel, Vector<String>),
