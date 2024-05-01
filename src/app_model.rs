@@ -1,3 +1,5 @@
+use std::sync::mpsc::{channel, Sender, Receiver};
+
 use druid::im::{OrdSet, Vector};
 
 use druid::{Data, TimerToken, Lens };
@@ -20,6 +22,13 @@ pub enum FocusFilter {
     Status(TaskStatus),
     All
 }
+
+// TODO:
+// #[derive(PartialEq)]
+// enum AppMessage {
+    
+//     Quit,
+// }
 
 impl FocusFilter {
     pub fn to_string(&self) -> &str {
@@ -63,15 +72,20 @@ impl FocusFilter {
     }
 }
 
-#[derive(Debug, Clone, Data)]
+#[derive(Debug)]
+pub struct TimerTok
+{
+    pub channel: Receiver<u32>,
+}
+
+#[derive(Debug)]
 pub struct TrackingCtx {
     pub state: TrackingState,
     pub timestamp: Rc<DateTime<Utc>>,
-    pub timer_id: Rc<TimerToken>,
+    pub timer: Option<TimerTok>,
     pub elapsed: Rc<chrono::Duration>,
 }
 
-#[derive(Clone, Data, Lens)]
 pub struct AppModel {
     pub db: Rc<rusqlite::Connection>,
     pub tasks: TaskMap,

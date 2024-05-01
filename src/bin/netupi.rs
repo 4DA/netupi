@@ -9,8 +9,10 @@ use std::io::{self, stdout};
 
 use druid::{TimerToken};
 
+use std::sync::mpsc::{channel, TryRecvError};
+
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
+    event::{self, poll, Event, KeyCode, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
@@ -167,22 +169,45 @@ impl App {
     fn run(&mut self, mut terminal: Terminal<impl Backend>) -> io::Result<()> {
 
         loop {
+            if let Some(timer) = &self.model.tracking.timer {
+                let rv = timer.channel.try_recv();
+
+                if rv.is_ok() {
+                    println!("timer channel> recv val: {:?}", rv.ok().unwrap());
+
+                    if let TrackingState::Active(uid) = &self.model.tracking.state {
+                        self.model.tracking.state = TrackingState::Break(uid.clone());
+                    }
+                }
+                else {
+                    match rv.err().unwrap() {
+                        TryRecvError::Empty => {},
+                        TryRecvError::Disconnected => {},
+                    }
+                }
+
+            }
+            
             self.draw(&mut terminal)?;
 
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    use KeyCode::*;
-                    match key.code {
-                        Char('q') | Esc => return Ok(()),
-                        Left => self.active_widget = ActiveWidget::FocusWidget,
-                        Right => self.active_widget = ActiveWidget::TaskWidget,
-                        _ => match self.active_widget {
-                            ActiveWidget::TaskWidget => self.task_list.keymap_task_list(&mut self.model, key.code),
-                            ActiveWidget::FocusWidget => self.keymap_filter_list(key.code),
+            if poll(std::time::Duration::from_millis(500))? {
+                if let Event::Key(key) = event::read()? {
+                    if key.kind == KeyEventKind::Press {
+                        use KeyCode::*;
+                        match key.code {
+                            Char('q') | Esc => return Ok(()),
+                            Left => self.active_widget = ActiveWidget::FocusWidget,
+                            Right => self.active_widget = ActiveWidget::TaskWidget,
+                            _ => match self.active_widget {
+                                ActiveWidget::TaskWidget => self.task_list.keymap_task_list(&mut self.model, key.code),
+                                ActiveWidget::FocusWidget => self.keymap_filter_list(key.code),
+                            }
                         }
                     }
                 }
+
             }
+
         }
     }
 
@@ -549,7 +574,7 @@ pub fn main() -> anyhow::Result<()> {
         tags,
         tracking: TrackingCtx{state: TrackingState::Inactive,
                               timestamp: Rc::new(Utc::now()),
-                              timer_id: Rc::new(TimerToken::INVALID),
+                              timer: None,
                               elapsed: Rc::new(chrono::Duration::zero())},
 
         // todo make selected_task Option

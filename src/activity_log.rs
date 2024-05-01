@@ -58,184 +58,184 @@ pub fn format_time_record(task: &Task, record: &TimeRecord) -> String {
     format!("{} {:<10} {:<10}", name, duration, time)
 }
 
-impl<W: Widget<TimeRecordCtx>> Controller<TimeRecordCtx, W> for LogEntryController {
-    fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event,
-        data: &mut TimeRecordCtx, env: &Env,)
-    {
-        match event {
-            // Event::Command(cmd) if cmd.is(LogEntryController::CMD_HOT) => {
-            //     let value = cmd.get(LogEntryController::CMD_HOT).unwrap();
+// impl<W: Widget<TimeRecordCtx>> Controller<TimeRecordCtx, W> for LogEntryController {
+//     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event,
+//         data: &mut TimeRecordCtx, env: &Env,)
+//     {
+//         match event {
+//             // Event::Command(cmd) if cmd.is(LogEntryController::CMD_HOT) => {
+//             //     let value = cmd.get(LogEntryController::CMD_HOT).unwrap();
 
-            //     if (*value).eq(&data.1.from) {
-            //         ctx.set_handled();
-            //     }
-            // },
-            _ => child.event(ctx, event, data, env),
-        }
+//             //     if (*value).eq(&data.1.from) {
+//             //         ctx.set_handled();
+//             //     }
+//             // },
+//             _ => child.event(ctx, event, data, env),
+//         }
 
-        ctx.set_cursor(&Cursor::Pointer);
-    }
+//         ctx.set_cursor(&Cursor::Pointer);
+//     }
 
-    fn lifecycle(&mut self, child: &mut W, ctx: &mut LifeCycleCtx<'_, '_>,
-                     event: &LifeCycle, data: &TimeRecordCtx, env: &Env)
-    {
-        match event {
-            // LifeCycle::HotChanged(value) => if *value {
-            //     ctx.submit_command(LogEntryController::CMD_HOT.with(data.1.from.clone()));
-            // },
+//     fn lifecycle(&mut self, child: &mut W, ctx: &mut LifeCycleCtx<'_, '_>,
+//                      event: &LifeCycle, data: &TimeRecordCtx, env: &Env)
+//     {
+//         match event {
+//             // LifeCycle::HotChanged(value) => if *value {
+//             //     ctx.submit_command(LogEntryController::CMD_HOT.with(data.1.from.clone()));
+//             // },
 
-            _ => child.lifecycle(ctx, event, data, env),
-        }
-    }
-}
+//             _ => child.lifecycle(ctx, event, data, env),
+//         }
+//     }
+// }
 
-pub struct ActivityLogWidget {
-    inner: WidgetPod<AppModel, Container<AppModel>>,
-    hot: Option<Rc<DateTime<Utc>>>,
-}
+// pub struct ActivityLogWidget {
+//     inner: WidgetPod<AppModel, Container<AppModel>>,
+//     hot: Option<Rc<DateTime<Utc>>>,
+// }
 
-impl ActivityLogWidget {
-    pub fn new() -> ActivityLogWidget
-    {
-        let flex = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start)
+// impl ActivityLogWidget {
+//     pub fn new() -> ActivityLogWidget
+//     {
+//         let flex = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start)
 
-            .with_child(
-                    List::new(||{
-                        Label::new(|((model, _killed), record): &TimeRecordCtx, _env: &_| {
-                            if let Some(task) = model.tasks.get(&record.uid) {
-                                format_time_record(&task, &record)
-                            } else {
-                                "".to_string()
-                            }
-                        })
-                        .with_font(FONT_LOG_DESCR.clone())
+//             .with_child(
+//                     List::new(||{
+//                         Label::new(|((model, _killed), record): &TimeRecordCtx, _env: &_| {
+//                             if let Some(task) = model.tasks.get(&record.uid) {
+//                                 format_time_record(&task, &record)
+//                             } else {
+//                                 "".to_string()
+//                             }
+//                         })
+//                         .with_font(FONT_LOG_DESCR.clone())
 
-                        .padding(6.0)
-                        .controller(LogEntryController)
-                        .on_click(|_ctx, ((data, action), what): &mut TimeRecordCtx, _env| {
-                            if data.records_killed.contains(&what.from) {
-                                *action = LogEdit::Restored(what.from.clone());
-                            } else {
-                                *action = LogEdit::Killed(what.from.clone());
-                            }
-                        })
-                        .background(
-                            Painter::new(|ctx: &mut PaintCtx, ((model, _), record): &TimeRecordCtx, _env| {
-                                let bounds = ctx.size().to_rect();
+//                         .padding(6.0)
+//                         .controller(LogEntryController)
+//                         .on_click(|_ctx, ((data, action), what): &mut TimeRecordCtx, _env| {
+//                             if data.records_killed.contains(&what.from) {
+//                                 *action = LogEdit::Restored(what.from.clone());
+//                             } else {
+//                                 *action = LogEdit::Killed(what.from.clone());
+//                             }
+//                         })
+//                         .background(
+//                             Painter::new(|ctx: &mut PaintCtx, ((model, _), record): &TimeRecordCtx, _env| {
+//                                 let bounds = ctx.size().to_rect();
 
-                                let line =kurbo::Line::new(Point::new(bounds.min_x(), bounds.center().y), 
-                                                           Point::new(bounds.max_x(), bounds.center().y));
+//                                 let line =kurbo::Line::new(Point::new(bounds.min_x(), bounds.center().y), 
+//                                                            Point::new(bounds.max_x(), bounds.center().y));
                                 
-                                match (model.records_killed.contains(&record.from), ctx.is_hot()) {
-                                    (true, false) => ctx.stroke(line.clone(), &COLOR_ACTIVE, 2.0),
-                                    (true, true) => ctx.stroke(line.clone(), &RESTORED_TASK_BORDER, 2.0),
-                                    (false, true) => ctx.stroke(line.clone(), &DELETING_TASK_BORDER, 2.0),
-                                    _ => {},
-                                }
-                            }))
-                    })
-            .padding((0.0, 0.0, 15.0, 0.0))
-            .lens(lens::Identity.map(
-                |m: &AppModel| ((m.clone(),
-                                LogEdit::None),
-                                m.records.values().map(|v| v.clone()).rev().collect()),
+//                                 match (model.records_killed.contains(&record.from), ctx.is_hot()) {
+//                                     (true, false) => ctx.stroke(line.clone(), &COLOR_ACTIVE, 2.0),
+//                                     (true, true) => ctx.stroke(line.clone(), &RESTORED_TASK_BORDER, 2.0),
+//                                     (false, true) => ctx.stroke(line.clone(), &DELETING_TASK_BORDER, 2.0),
+//                                     _ => {},
+//                                 }
+//                             }))
+//                     })
+//             .padding((0.0, 0.0, 15.0, 0.0))
+//             .lens(lens::Identity.map(
+//                 |m: &AppModel| ((m.clone(),
+//                                 LogEdit::None),
+//                                 m.records.values().map(|v| v.clone()).rev().collect()),
 
-                |outer: &mut AppModel, ((_inner, action), _) : ((AppModel, LogEdit), Vector<TimeRecord>)|
-                {
-                      match action {
-                        LogEdit::None => {},
-                        LogEdit::Killed(ref ts) => {
-                            if let Some(rec) = outer.records.get(&ts) {
-                                if let Err(what) = db::remove_time_record(outer.db.clone(), &rec) {
-                                    println!("db error: {}", what);                                
-                                }
-                            }
+//                 |outer: &mut AppModel, ((_inner, action), _) : ((AppModel, LogEdit), Vector<TimeRecord>)|
+//                 {
+//                       match action {
+//                         LogEdit::None => {},
+//                         LogEdit::Killed(ref ts) => {
+//                             if let Some(rec) = outer.records.get(&ts) {
+//                                 if let Err(what) = db::remove_time_record(outer.db.clone(), &rec) {
+//                                     println!("db error: {}", what);                                
+//                                 }
+//                             }
 
-                            outer.records_killed = Rc::new(outer.records_killed.update(*ts.clone()));
-                            let mut sums = TaskSums::new();
+//                             outer.records_killed = Rc::new(outer.records_killed.update(*ts.clone()));
+//                             let mut sums = TaskSums::new();
                             
-                            for (uid, _) in &outer.tasks {
-                                let sum = build_time_prefix_sum(&outer.tasks, &outer.records,
-                                                                uid.clone(), &outer.records_killed);
-                                sums.insert(uid.clone(), sum);
-                            }
+//                             for (uid, _) in &outer.tasks {
+//                                 let sum = build_time_prefix_sum(&outer.tasks, &outer.records,
+//                                                                 uid.clone(), &outer.records_killed);
+//                                 sums.insert(uid.clone(), sum);
+//                             }
                             
-                            outer.task_sums = sums;
-                        },
-                        LogEdit::Restored(ref ts) => {
-                            if let Some(rec) = outer.records.get(&ts) {
-                                if let Err(what) = db::add_time_record(outer.db.clone(), &rec) {
-                                    println!("db error: {}", what);
-                                }
-                            }
+//                             outer.task_sums = sums;
+//                         },
+//                         LogEdit::Restored(ref ts) => {
+//                             if let Some(rec) = outer.records.get(&ts) {
+//                                 if let Err(what) = db::add_time_record(outer.db.clone(), &rec) {
+//                                     println!("db error: {}", what);
+//                                 }
+//                             }
 
-                            outer.records_killed = Rc::new(outer.records_killed.without(ts));                            
-                            let mut sums = TaskSums::new();
+//                             outer.records_killed = Rc::new(outer.records_killed.without(ts));                            
+//                             let mut sums = TaskSums::new();
                             
-                            for (uid, _) in &outer.tasks {
-                                let sum = build_time_prefix_sum(&outer.tasks, &outer.records,
-                                                                uid.clone(), &outer.records_killed);
-                                sums.insert(uid.clone(), sum);
-                            }
+//                             for (uid, _) in &outer.tasks {
+//                                 let sum = build_time_prefix_sum(&outer.tasks, &outer.records,
+//                                                                 uid.clone(), &outer.records_killed);
+//                                 sums.insert(uid.clone(), sum);
+//                             }
                             
-                            outer.task_sums = sums;                            
-                        }
-                    }
-                },
-            )));
+//                             outer.task_sums = sums;                            
+//                         }
+//                     }
+//                 },
+//             )));
 
-        ActivityLogWidget {inner: WidgetPod::new(Container::new(flex)), hot: None}
-    }
-}
+//         ActivityLogWidget {inner: WidgetPod::new(Container::new(flex)), hot: None}
+//     }
+// }
 
-impl Widget<AppModel> for ActivityLogWidget {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event,
-             data: &mut AppModel, _env: &Env) {
+// impl Widget<AppModel> for ActivityLogWidget {
+//     fn event(&mut self, ctx: &mut EventCtx, event: &Event,
+//              data: &mut AppModel, _env: &Env) {
 
-        match event {
-            Event::Command(cmd) if cmd.is(LogEntryController::CMD_HOT) => {
-                ctx.set_handled();
+//         match event {
+//             Event::Command(cmd) if cmd.is(LogEntryController::CMD_HOT) => {
+//                 ctx.set_handled();
 
-                let value = cmd.get(LogEntryController::CMD_HOT).unwrap().clone();
+//                 let value = cmd.get(LogEntryController::CMD_HOT).unwrap().clone();
 
-                if let Some(prev_hot) = &self.hot {
-                    if !prev_hot.same(&value) {
-                        self.hot = Some(value);
-                    }
-                } else {
-                    self.hot = Some(value);
-                }
+//                 if let Some(prev_hot) = &self.hot {
+//                     if !prev_hot.same(&value) {
+//                         self.hot = Some(value);
+//                     }
+//                 } else {
+//                     self.hot = Some(value);
+//                 }
 
-                ctx.request_paint();
-            },
-            Event::Command(cmd) if cmd.is(LogEntryController::CMD_COLD) => {
-                ctx.set_handled();
-                self.hot = None;
-            },
-            _ => self.inner.event(ctx, event, data, _env),
-        }
-    }
+//                 ctx.request_paint();
+//             },
+//             Event::Command(cmd) if cmd.is(LogEntryController::CMD_COLD) => {
+//                 ctx.set_handled();
+//                 self.hot = None;
+//             },
+//             _ => self.inner.event(ctx, event, data, _env),
+//         }
+//     }
 
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &AppModel, _env: &Env) {
-        match event {
+//     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &AppModel, _env: &Env) {
+//         match event {
 
-            _ => self.inner.lifecycle(ctx, event, _data, _env)
-        };
-    }
+//             _ => self.inner.lifecycle(ctx, event, _data, _env)
+//         };
+//     }
 
-    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &AppModel, _data: &AppModel, _env: &Env) {
-        self.inner.update(_ctx, _data, _env)
-    }
+//     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &AppModel, _data: &AppModel, _env: &Env) {
+//         self.inner.update(_ctx, _data, _env)
+//     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &AppModel, env: &Env,
-    ) -> Size {
-        let ret = self.inner.layout(ctx, bc, data, env);
-        self.inner.set_origin(ctx, &data, env, Point::new(10.0, 10.0));
-        ret
-    }
+//     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &AppModel, env: &Env,
+//     ) -> Size {
+//         let ret = self.inner.layout(ctx, bc, data, env);
+//         self.inner.set_origin(ctx, &data, env, Point::new(10.0, 10.0));
+//         ret
+//     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &AppModel, env: &Env) {
-        self.inner.paint(ctx, data, env);
-    }
-}
+//     fn paint(&mut self, ctx: &mut PaintCtx, data: &AppModel, env: &Env) {
+//         self.inner.paint(ctx, data, env);
+//     }
+// }
 
