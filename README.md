@@ -40,7 +40,7 @@ cargo run --bin import_csv <filename>
 
 # Building
 1. install [rust](https://www.rust-lang.org/tools/install)
-2. make sure you have sqlite3 (+ alsa-dev for linux)
+2. ubuntu packages: libsqlite3-0 libasound2-dev libglib2.0-dev libpango1.0-dev libgdk-pixbuf2.0-dev libgtk-3-dev
 3. cargo build --release
 
 # Installing
