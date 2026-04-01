@@ -3,7 +3,7 @@ use std::iter::FromIterator;
 use std::path::PathBuf;
 use std::fs;
 
-use druid::im::{OrdSet};
+use im::OrdSet;
 
 use rusqlite::{
     params,
@@ -95,12 +95,10 @@ pub fn add_task(conn: Rc<Connection>, task: &Task) -> anyhow::Result<()> {
                 &task.priority.to_string(), &serde_json::to_string(&task.task_status).unwrap(),
                 &DurationWrapper(*task.work_duration),
                 &DurationWrapper(*task.break_duration),
-                task.color.as_rgba_u32(),
+                task.color,
                 &task.seq.to_string(),
         ],
     )?;
-
-    println!("insert ok | t: {:?}", &task);
 
     Ok(())
 }
@@ -112,10 +110,8 @@ pub fn update_task(conn: Rc<Connection>, task: &Task) -> anyhow::Result<()> {
                 &serde_json::to_string(&Wrapper::new(&task.tags)).unwrap(),
                 &task.priority.to_string(), &serde_json::to_string(&task.task_status).unwrap(),
                 &DurationWrapper(*task.work_duration), &DurationWrapper(*task.break_duration),
-                &task.seq.to_string(), task.color.as_rgba_u32(), &task.uid],
+                &task.seq.to_string(), task.color, &task.uid],
     )?;
-
-    println!("update ok | t: {:?}", &task);
 
     Ok(())
 }
@@ -126,8 +122,6 @@ pub fn delete_task(conn: Rc<Connection>, uid: &String) -> anyhow::Result<()> {
         "DELETE FROM tasks WHERE uid = ?1;",
         &[uid],
     )?;
-
-    println!("delete ok | t: {:?}", uid);
 
     Ok(())
 }
@@ -161,8 +155,7 @@ pub fn get_tasks(conn: Rc<Connection>) -> anyhow::Result<(TaskMap, TagSet)>
                              .unwrap_or(TaskStatus::NeedsAction),
             work_duration  : Rc::new(work_duration.0),
             break_duration : Rc::new(rest_duration.0),
-            color          : druid::Color::from_rgba32_u32(row.get::<usize, u32>(9)?)
-                             .with_alpha(1.0),
+            color          : row.get::<usize, u32>(9)?,
         })
     })?;
 
@@ -189,8 +182,6 @@ pub fn add_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::Res
         params![TimeWrapper(*record.from), TimeWrapper(*record.to), record.uid],
     )?;
 
-    println!("time record insert ok | t: {:?}", &record);
-
     Ok(())
 }
 
@@ -200,8 +191,6 @@ pub fn remove_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::
         "DELETE FROM time_records WHERE ts_from = ?1",
         params![TimeWrapper(*record.from)],
     )?;
-
-    println!("remove ok | t: {:?}", &record);
 
     Ok(())
 }

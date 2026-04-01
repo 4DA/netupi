@@ -1,15 +1,13 @@
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::Receiver;
 
-use druid::im::{OrdSet, Vector};
-
-use druid::{Data, TimerToken, Lens };
+use im::{OrdSet, Vector};
 
 use chrono::prelude::*;
 use std::rc::Rc;
 
 use crate::task::*;
 
-#[derive(Debug, Clone, Data)]
+#[derive(Debug, Clone)]
 pub enum TrackingState {
     Inactive,
     Active(String),
@@ -17,18 +15,11 @@ pub enum TrackingState {
     Break(String)
 }
 
-#[derive(Debug, Clone, PartialEq, Data)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FocusFilter {
     Status(TaskStatus),
     All
 }
-
-// TODO:
-// #[derive(PartialEq)]
-// enum AppMessage {
-    
-//     Quit,
-// }
 
 impl FocusFilter {
     pub fn to_string(&self) -> &str {
@@ -97,20 +88,14 @@ pub struct AppModel {
     pub selected_task: Option<String>,
     pub focus_filter: FocusFilter,
     pub tag_filter: Option<String>,
-    pub hot_log_entry: Option<Rc<DateTime<Utc>>>,
-
-    pub show_task_edit: bool,
-    pub show_task_summary: bool
 }
 
 pub fn get_work_interval(model: &AppModel, uid: &String) -> chrono::Duration {
     *model.tasks.get(uid).unwrap().work_duration.clone()
-    // chrono::Duration::seconds(10)
 }
 
 pub fn get_rest_interval(model: &AppModel, uid: &String) -> chrono::Duration {
     *model.tasks.get(uid).unwrap().break_duration.clone()
-    // chrono::Duration::seconds(10)
 }
 
 impl AppModel {
@@ -149,7 +134,7 @@ impl AppModel {
 
         elems.sort_by(|v1: &&Task, v2: &&Task| v1.cmp(v2));
 
-        return elems.iter().map(|v| v.clone()).cloned().collect();
+        return elems.iter().cloned().cloned().collect();
     }
 
     pub fn get_uids_filtered(&self) -> Vector<String> {
@@ -160,7 +145,6 @@ impl AppModel {
         if let Some(ref selected) = self.selected_task {
             let mut filtered: Vector<String> = self.get_uids_filtered();
 
-            // select any task if currently selected is filtered out
             if !filtered.contains(selected) {
                 self.selected_task = filtered.pop_front();
             }
@@ -186,4 +170,3 @@ impl AppModel {
         self.tags = self.get_tags();
     }
 }
-

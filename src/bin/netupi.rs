@@ -1,15 +1,8 @@
-// On Windows platform, don't show a console when opening the app.
-#![windows_subsystem = "windows"]
-
 use std::rc::Rc;
 use std::time::SystemTime;
 use std::path::PathBuf;
 
 use std::io::{self, stdout};
-
-use druid::{TimerToken};
-
-use std::sync::mpsc::{channel, TryRecvError};
 
 use crossterm::{
     event::{self, poll, Event, KeyCode, KeyEventKind},
@@ -22,14 +15,12 @@ use chrono::prelude::*;
 
 use clap::Parser;
 
-use netupi::maybe::Maybe;
 use netupi::task::*;
 use netupi::db;
 use netupi::app_model::*;
 use netupi::task_list::*;
 use netupi::task_details::*;
 use netupi::activity_log::*;
-use netupi::common::*;
 use netupi::time;
 use netupi::widgets;
 
@@ -38,6 +29,7 @@ const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
 const ALT_ROW_COLOR: Color = tailwind::SLATE.c900;
 const SELECTED_STYLE_FG: Color = tailwind::BLUE.c300;
 const TEXT_COLOR: Color = tailwind::SLATE.c200;
+#[allow(unused)]
 const COMPLETED_TEXT_COLOR: Color = tailwind::GREEN.c500;
 
 #[derive(Parser, Debug)]
@@ -49,7 +41,7 @@ struct Args {
 
 fn get_db_path(args: &Args) -> PathBuf {
     let mut default_config_dir = dirs::config_dir().unwrap_or(PathBuf::new());
-    default_config_dir.push("netupi-dev");
+    default_config_dir.push("netupi");
     args.config_dir.clone().unwrap_or(default_config_dir)
 }
 
@@ -65,10 +57,6 @@ fn get_last_task(tasks: &TaskMap, records: &TimeRecordMap) -> Option<String>
 
     return None;
 }
-
-// struct StatusItem {
-//     status: TaskStatus
-// }
 
 struct StatusList {
     state: ListState,
@@ -94,19 +82,9 @@ impl StatusList {
     }
 }
 
-fn filter_to_list_item(filter: &FocusFilter, index: usize) -> ListItem {
+fn filter_to_list_item(filter: &FocusFilter) -> ListItem {
     let line = filter.to_string();
     ListItem::new(line).bg(NORMAL_ROW_COLOR)
-}
-
-fn task_to_list_item(task: &Task, index: usize) -> ListItem {
-    let bg_color = match index % 2 {
-        0 => NORMAL_ROW_COLOR,
-        _ => ALT_ROW_COLOR,
-    };
-    let line = format!("{}", task.name);
-
-    ListItem::new(line).bg(bg_color)
 }
 
 #[derive(PartialEq)]
@@ -139,7 +117,7 @@ impl App {
 
         let last_selected = None;
 
-        let mut task_list = TaskList{state, items, last_selected};
+        let task_list = TaskList{state, items, last_selected};
         let filter_list = StatusList::new(&model.focus_filter);
 
         return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget};
@@ -163,31 +141,11 @@ impl App {
         }
     }
 
-    // TODO: use messages
-    // https://ratatui.rs/concepts/application-patterns/the-elm-architecture/
-
     fn run(&mut self, mut terminal: Terminal<impl Backend>) -> io::Result<()> {
 
         loop {
-            if let Some(timer) = &self.model.tracking.timer {
-                let rv = timer.channel.try_recv();
+            handle_timer_event(&mut self.model);
 
-                if rv.is_ok() {
-                    println!("timer channel> recv val: {:?}", rv.ok().unwrap());
-
-                    if let TrackingState::Active(uid) = &self.model.tracking.state {
-                        self.model.tracking.state = TrackingState::Break(uid.clone());
-                    }
-                }
-                else {
-                    match rv.err().unwrap() {
-                        TryRecvError::Empty => {},
-                        TryRecvError::Disconnected => {},
-                    }
-                }
-
-            }
-            
             self.draw(&mut terminal)?;
 
             if poll(std::time::Duration::from_millis(500))? {
@@ -195,11 +153,20 @@ impl App {
                     if key.kind == KeyEventKind::Press {
                         use KeyCode::*;
                         match key.code {
-                            Char('q') | Esc => return Ok(()),
-                            Left => self.active_widget = ActiveWidget::FocusWidget,
-                            Right => self.active_widget = ActiveWidget::TaskWidget,
+                            Char('q') => return Ok(()),
+                            Left | Char('h') => self.active_widget = ActiveWidget::FocusWidget,
+                            Right | Char('l') => self.active_widget = ActiveWidget::TaskWidget,
+                            Tab => {
+                                self.active_widget = match self.active_widget {
+                                    ActiveWidget::TaskWidget => ActiveWidget::FocusWidget,
+                                    ActiveWidget::FocusWidget => ActiveWidget::TaskWidget,
+                                };
+                            }
                             _ => match self.active_widget {
-                                ActiveWidget::TaskWidget => self.task_list.keymap_task_list(&mut self.model, key.code),
+                                ActiveWidget::TaskWidget => {
+                                    self.task_list.keymap_task_list(&mut self.model, key.code);
+                                    self.filter_list.update(&self.model.focus_filter);
+                                },
                                 ActiveWidget::FocusWidget => self.keymap_filter_list(key.code),
                             }
                         }
@@ -211,7 +178,7 @@ impl App {
         }
     }
 
-    
+
     fn draw(&mut self, terminal: &mut Terminal<impl Backend>) -> io::Result<()> {
         terminal.draw(|f| f.render_widget(self, f.size()))?;
         Ok(())
@@ -271,7 +238,7 @@ impl App {
 
         outer_block.render(outer_area, buf);
 
-        let items: Vec<ListItem> = self.filter_list.items.iter().map(|x| filter_to_list_item(x, 0)).collect();
+        let items: Vec<ListItem> = self.filter_list.items.iter().map(|x| filter_to_list_item(x)).collect();
 
         let items = List::new(items)
             .block(inner_block)
@@ -288,7 +255,6 @@ impl App {
     }
 
     fn render_task_list(&mut self, area: Rect, buf: &mut Buffer) {
-        // We create two blocks, one is for the header (outer) and the other is for list (inner).
         let outer_block = Block::default()
             .borders(if self.active_widget == ActiveWidget::TaskWidget {Borders::all()} else {Borders::NONE})
             .padding(if self.active_widget != ActiveWidget::TaskWidget {Padding::symmetric(1, 0)} else {Padding::uniform(0)})
@@ -302,11 +268,9 @@ impl App {
             .fg(TEXT_COLOR)
             .bg(NORMAL_ROW_COLOR);
 
-        // We get the inner area from outer_block. We'll use this area later to render the table.
         let outer_area = area;
         let inner_area = outer_block.inner(outer_area);
 
-        // We can render the header in outer_area.
         outer_block.render(outer_area, buf);
 
         let tasks = self.model.get_tasks_filtered();
@@ -314,10 +278,30 @@ impl App {
         let items: Vec<ListItem> = tasks
             .iter()
             .enumerate()
-            .map(|(i, t)| task_to_list_item(&t, i))
+            .map(|(i, t)| {
+                let bg_color = match i % 2 {
+                    0 => NORMAL_ROW_COLOR,
+                    _ => ALT_ROW_COLOR,
+                };
+
+                let priority_indicator = match t.priority.into() {
+                    CuaPriority::High => "! ",
+                    CuaPriority::Low => "v ",
+                    _ => "  ",
+                };
+
+                let tracking_indicator = match &self.model.tracking.state {
+                    TrackingState::Active(uid) if uid == &t.uid => "> ",
+                    TrackingState::Paused(uid) if uid == &t.uid => "| ",
+                    TrackingState::Break(uid) if uid == &t.uid => "~ ",
+                    _ => "  ",
+                };
+
+                let line = format!("{}{}{}", tracking_indicator, priority_indicator, t.name);
+                ListItem::new(line).bg(bg_color)
+            })
             .collect();
 
-        // Create a List from all list items and highlight the currently selected one
         let items = List::new(items)
             .block(inner_block)
             .highlight_style(
@@ -329,9 +313,6 @@ impl App {
             .highlight_symbol(">")
             .highlight_spacing(HighlightSpacing::Always);
 
-        // We can now render the item list
-        // (look careful we are using StatefulWidget's render.)
-        // ratatui::widgets::StatefulWidget::render as stateful_render
         StatefulWidget::render(items, inner_area, buf, &mut self.task_list.state);
     }
 
@@ -358,16 +339,13 @@ impl App {
             .bg(NORMAL_ROW_COLOR)
             .padding(Padding::horizontal(1));
 
-        // This is a similar process to what we did for list. outer_info_area will be used for
-        // header inner_info_area will be used for the list info.
         let outer_info_area = area;
         let inner_info_area = outer_info_block.inner(outer_info_area);
 
-        // We can render the header. Inner info will be rendered later
         outer_info_block.render(outer_info_area, buf);
 
-        // TODO handle non selected case here
-        let task_sum = &self.model.task_sums.get(&self.model.selected_task.clone().unwrap()).unwrap();
+        let selected_uid = self.model.selected_task.clone().unwrap();
+        let task_sum = self.model.task_sums.get(&selected_uid).unwrap();
         let agg = time::get_duration(&task_sum, &Local::now());
         let durations = widgets::get_task_durations(&agg);
 
@@ -396,7 +374,6 @@ impl App {
         info_paragraph.render(right_area, buf);
 
         // render retrospective
-        // --
         let mut retro: String = String::new();
 
         for i in 0..28 {
@@ -420,11 +397,6 @@ impl App {
             .bg(TODO_HEADER_BG)
             .title("Total time log")
             .title_alignment(Alignment::Center);
-
-        let inner_info_block = Block::default()
-            .borders(Borders::NONE)
-            .bg(NORMAL_ROW_COLOR)
-            .padding(Padding::horizontal(1));
 
         let left_block = Block::default()
             .borders(Borders::NONE)
@@ -502,25 +474,32 @@ impl App {
     }
 }
 
-    fn render_title(area: Rect, buf: &mut Buffer) {
-        Paragraph::new("WIP: Title")
-            .bold()
-            .centered()
-            .render(area, buf);
-    }
+fn render_title(area: Rect, buf: &mut Buffer) {
+    Paragraph::new("netupi")
+        .bold()
+        .centered()
+        .render(area, buf);
+}
 
-    fn render_footer(model: &AppModel, area: Rect, buf: &mut Buffer) {
-        let status = get_status_string(model);
-        Paragraph::new(status)
-            .centered()
-            .render(area, buf);
-    }
+fn render_footer(model: &AppModel, area: Rect, buf: &mut Buffer) {
+    let status = get_status_string(model);
+    let help = " q:quit  space:start/pause  Esc:stop  n:new  c:complete  a:archive  Tab:switch";
+
+    let footer_text = if status.is_empty() {
+        help.to_string()
+    } else {
+        format!("{} | {}", status, help)
+    };
+
+    Paragraph::new(footer_text)
+        .centered()
+        .render(area, buf);
+}
 
 
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // Create a space for header, todo list and the footer.
         let vertical = Layout::vertical([
             Constraint::Length(2),
             Constraint::Min(0),
@@ -528,13 +507,8 @@ impl Widget for &mut App {
         ]);
         let [header_area, rest_area, footer_area] = vertical.areas(area);
 
-        // Create two chunks with equal vertical screen space. One for the list and the other for
-        // the info block.
-        let vertical = Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]);
-        let [upper_item_list_area, lower_item_list_area] = vertical.areas(rest_area);
-
         render_title(header_area, buf);
-        self.render_main_widget(upper_item_list_area, buf);
+        self.render_main_widget(rest_area, buf);
         render_footer(&self.model, footer_area, buf);
     }
 }
@@ -565,7 +539,7 @@ pub fn main() -> anyhow::Result<()> {
         FocusFilter::All
     };
 
-    let mut data = AppModel{
+    let data = AppModel{
         db,
         tasks,
         records,
@@ -577,42 +551,29 @@ pub fn main() -> anyhow::Result<()> {
                               timer: None,
                               elapsed: Rc::new(chrono::Duration::zero())},
 
-        // todo make selected_task Option
         selected_task: last_task,
         focus_filter: filter,
         tag_filter: None,
-        hot_log_entry: None,
-        show_task_edit: false,
-        show_task_summary: true,
     };
 
-
-    // TODO should be done in ctor
-    data.update_tags();
-
     let mut app = App::new(data);
-
-    // initialize ratatui context
-    // --
 
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
 
-    let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+    let terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
 
-    app.run(terminal)?;
+    let result = app.run(terminal);
 
     disable_raw_mode()?;
     stdout().execute(LeaveAlternateScreen)?;
+
+    result?;
 
     Ok(())
 }
 
 fn get_status_string(d: &AppModel) -> String {
-    // DEBUG
-    // return d.focus_filter.to_string().into();
-    // return d.selected_task.clone().unwrap().to_string().into();
-
     match d.tracking.state {
         TrackingState::Active(ref uid) => {
             let active_task = &d.tasks.get(uid).expect("unknown uid");
@@ -646,7 +607,7 @@ fn get_status_string(d: &AppModel) -> String {
                     time::format_duration(&get_work_interval(d, uid)))
         },
 
-        _ => format!("STATUS TEXT")
+        _ => String::new()
     }
 
 }

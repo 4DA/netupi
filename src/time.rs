@@ -4,8 +4,8 @@ use chrono::prelude::*;
 use crate::task::*;
 
 pub struct FormatOpts {
-    optimize_secs: bool, // don't show seconds when duration > 1min
-    show_days: bool, // show work days
+    optimize_secs: bool,
+    show_days: bool,
 }
 
 impl FormatOpts {
@@ -31,8 +31,8 @@ pub fn format_duration(dur: &chrono::Duration) -> String {
     let hours = if opts.show_days && dur.num_hours() % 24 != 0 ||
         !opts.show_days && dur.num_hours() > 0
     {
-        format!("{}{:wid$}h", if dhms[0] == 0 {""} else {" "}, 
-                if opts.show_days {dur.num_hours() % 24} else {dur.num_hours()}, 
+        format!("{}{:wid$}h", if dhms[0] == 0 {""} else {" "},
+                if opts.show_days {dur.num_hours() % 24} else {dur.num_hours()},
                 wid = if dhms[0] == 0 {1} else {2})
     } else {"".to_string()};
 
