@@ -239,6 +239,13 @@ impl App {
                                             ActiveWidget::ActivityLogWidget => ActiveWidget::FocusWidget,
                                         };
                                     }
+                                    BackTab => {
+                                        self.active_widget = match self.active_widget {
+                                            ActiveWidget::FocusWidget => ActiveWidget::ActivityLogWidget,
+                                            ActiveWidget::TaskWidget => ActiveWidget::FocusWidget,
+                                            ActiveWidget::ActivityLogWidget => ActiveWidget::TaskWidget,
+                                        };
+                                    }
                                     _ => match self.active_widget {
                                         ActiveWidget::TaskWidget => {
                                             self.task_list.keymap_task_list(&mut self.model, key.code);
@@ -686,26 +693,49 @@ fn render_title(area: Rect, buf: &mut Buffer) {
         .render(area, buf);
 }
 
+fn help_keys(active_widget: &ActiveWidget, model: &AppModel) -> Vec<(&'static str, &'static str)> {
+    match active_widget {
+        ActiveWidget::ActivityLogWidget => vec![
+            ("j/k", "nav"), ("x", "kill/unkill"), ("Tab", "switch"), ("q", "quit"),
+        ],
+        _ if model.focus_filter == FocusFilter::Status(TaskStatus::Archived) => vec![
+            ("q", "quit"), ("n", "new"), ("e", "edit"), ("d", "delete"), ("Tab", "switch"),
+        ],
+        _ => vec![
+            ("q", "quit"), ("space", "start/pause"), ("Esc", "stop"),
+            ("n", "new"), ("e", "edit"), ("c", "complete"), ("a", "archive"), ("Tab", "switch"),
+        ],
+    }
+}
+
 fn render_footer(model: &AppModel, active_widget: &ActiveWidget, area: Rect, buf: &mut Buffer) {
+    let vertical = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ]);
+    let [status_area, help_area] = vertical.areas(area);
+
+    // status line
     let status = get_status_string(model);
-    let help = match active_widget {
-        ActiveWidget::ActivityLogWidget =>
-            " j/k:nav  x:kill/unkill  Tab:switch  q:quit",
-        _ if model.focus_filter == FocusFilter::Status(TaskStatus::Archived) =>
-            " q:quit  n:new  e:edit  d:delete  Tab:switch",
-        _ =>
-            " q:quit  space:start/pause  Esc:stop  n:new  e:edit  c:complete  a:archive  Tab:switch",
-    };
-
-    let footer_text = if status.is_empty() {
-        help.to_string()
-    } else {
-        format!("{} | {}", status, help)
-    };
-
-    Paragraph::new(footer_text)
+    Paragraph::new(status)
         .centered()
-        .render(area, buf);
+        .fg(TEXT_COLOR)
+        .render(status_area, buf);
+
+    // help line with bold keys
+    let keys = help_keys(active_widget, model);
+    let mut spans: Vec<Span> = Vec::new();
+    for (i, (key, desc)) in keys.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("  "));
+        }
+        spans.push(Span::styled(format!(" {} ", key), Style::default().add_modifier(Modifier::BOLD).fg(TEXT_COLOR)));
+        spans.push(Span::styled(format!(" {} ", desc), Style::default().fg(tailwind::SLATE.c500)));
+    }
+
+    Paragraph::new(Line::from(spans))
+        .centered()
+        .render(help_area, buf);
 }
 
 
@@ -715,7 +745,7 @@ impl Widget for &mut App {
         let vertical = Layout::vertical([
             Constraint::Length(2),
             Constraint::Min(0),
-            Constraint::Length(2),
+            Constraint::Length(2), // status + help
         ]);
         let [header_area, rest_area, footer_area] = vertical.areas(area);
 
