@@ -399,17 +399,16 @@ impl App {
                     _ => "  ",
                 };
 
-                let tracking_indicator = match &self.model.tracking.state {
-                    TrackingState::Active(uid) if uid == &t.uid => "> ",
-                    TrackingState::Paused(uid) if uid == &t.uid => "| ",
-                    TrackingState::Break(uid) if uid == &t.uid => "~ ",
-                    _ => "  ",
-                };
-
                 let is_active = matches!(&self.model.tracking.state,
                     TrackingState::Active(uid) if uid == &t.uid);
                 let is_paused = matches!(&self.model.tracking.state,
                     TrackingState::Paused(uid) if uid == &t.uid);
+
+                let tracking_indicator = match &self.model.tracking.state {
+                    TrackingState::Paused(uid) if uid == &t.uid => "| ",
+                    TrackingState::Break(uid) if uid == &t.uid => "~ ",
+                    _ => "  ",
+                };
 
                 let row_fg = if is_active { theme::TRACKING_ACTIVE } else { theme::TEXT };
                 let row_bg = if is_paused { theme::TRACKING_PAUSED_BG } else { bg_color };
@@ -420,9 +419,13 @@ impl App {
                 } else {
                     Span::styled(" ", Style::default().bg(task_color))
                 };
+                let mut text_style = Style::default().fg(row_fg);
+                if is_active {
+                    text_style = text_style.add_modifier(Modifier::BOLD);
+                }
                 let text = Span::styled(
                     format!("{}{}{}", tracking_indicator, priority_indicator, t.name),
-                    Style::default().fg(row_fg),
+                    text_style,
                 );
 
                 ListItem::new(Line::from(vec![color_block, text])).bg(row_bg)
@@ -439,7 +442,18 @@ impl App {
     }
 
     fn render_task_stats(&mut self, area: Rect, buf: &mut Buffer) {
-        let outer_info_block = Block::default()
+        let selected_uid = self.model.selected_task.clone().unwrap();
+        let task_sum = self.model.task_sums.get(&selected_uid).unwrap();
+
+        // split vertically: aggregate stats on top, daily retrospective below
+        let vertical = Layout::vertical([
+            Constraint::Length(7), // border + 5 rows + border
+            Constraint::Min(5),
+        ]);
+        let [agg_area, retro_area] = vertical.areas(area);
+
+        // --- aggregate stats ---
+        let agg_block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme::BORDER_INACTIVE))
             .fg(theme::TEXT)
@@ -448,69 +462,52 @@ impl App {
             .title_style(Style::default().fg(theme::TITLE_INACTIVE))
             .title_alignment(Alignment::Center);
 
-        let left_block = Block::default()
-            .borders(Borders::NONE)
-            .bg(theme::ROW_BG)
-            .padding(Padding::horizontal(1));
+        let agg_inner = agg_block.inner(agg_area);
+        agg_block.render(agg_area, buf);
 
-        let inner_info_block = Block::default()
-            .borders(Borders::NONE)
-            .bg(theme::ROW_BG)
-            .padding(Padding::horizontal(1));
-
-        let retro_block = Block::default()
-            .borders(Borders::NONE)
-            .bg(theme::ROW_BG)
-            .padding(Padding::horizontal(1));
-
-        let outer_info_area = area;
-        let inner_info_area = outer_info_block.inner(outer_info_area);
-
-        outer_info_block.render(outer_info_area, buf);
-
-        let selected_uid = self.model.selected_task.clone().unwrap();
-        let task_sum = self.model.task_sums.get(&selected_uid).unwrap();
         let agg = time::get_duration(&task_sum, &Local::now());
         let durations = widgets::get_task_durations(&agg);
-
-        let captions:String = "Today\nWeek\nMonth\nYear\nAll time".into();
+        let captions: String = "Today\nWeek\nMonth\nYear\nAll time".into();
 
         let horizontal = Layout::horizontal([
-            Constraint::Length(15),
-            Constraint::Min(20),
-            Constraint::Min(30),
+            Constraint::Length(12),
+            Constraint::Min(10),
         ]);
+        let [cap_area, dur_area] = horizontal.areas(agg_inner);
 
-        let [left_area, right_area, retro_area] = horizontal.areas(inner_info_area);
-
-        let captions_paragraph = Paragraph::new(captions)
-            .block(left_block)
+        Paragraph::new(captions)
+            .block(Block::default().bg(theme::ROW_BG).padding(Padding::horizontal(1)))
             .fg(theme::TEXT)
-            .wrap(Wrap { trim: false });
+            .render(cap_area, buf);
 
-        let info_paragraph = Paragraph::new(durations)
-            .block(inner_info_block)
+        Paragraph::new(durations)
+            .block(Block::default().bg(theme::ROW_BG).padding(Padding::horizontal(1)))
             .fg(theme::TEXT)
-            .wrap(Wrap { trim: false });
+            .render(dur_area, buf);
 
+        // --- daily retrospective ---
+        let retro_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::BORDER_INACTIVE))
+            .fg(theme::TEXT)
+            .bg(theme::HEADER_BG)
+            .title("Daily")
+            .title_style(Style::default().fg(theme::TITLE_INACTIVE))
+            .title_alignment(Alignment::Center);
 
-        captions_paragraph.render(left_area, buf);
-        info_paragraph.render(right_area, buf);
+        let retro_inner = retro_block.inner(retro_area);
+        retro_block.render(retro_area, buf);
 
-        // render retrospective
-        let mut retro: String = String::new();
-
+        let mut retro = String::new();
         for i in 0..28 {
             retro.push_str(&get_day_time2(task_sum, i));
-            retro.push_str("\n");
+            retro.push('\n');
         }
 
-        let retro_paragraph = Paragraph::new(retro)
-            .block(retro_block)
+        Paragraph::new(retro)
+            .block(Block::default().bg(theme::ROW_BG).padding(Padding::horizontal(1)))
             .fg(theme::TEXT)
-            .wrap(Wrap { trim: false });
-
-        retro_paragraph.render(retro_area, buf);
+            .render(retro_inner, buf);
     }
 
     fn render_total_time_log(&mut self, area: Rect, buf: &mut Buffer) {
@@ -735,10 +732,30 @@ fn render_editor(editor: &TaskEditor, area: Rect, buf: &mut Buffer) {
     }
 }
 
-fn render_title(area: Rect, buf: &mut Buffer) {
-    Paragraph::new("netupi")
-        .bold()
-        .centered()
+fn render_title(model: &AppModel, area: Rect, buf: &mut Buffer) {
+    let now = Local::now();
+    let day_start: DateTime<Utc> = DateTime::from(now.date().and_hms(0, 0, 0));
+    let utc_now = Utc::now();
+
+    let agg = time::get_durations(&model.task_sums);
+    let today_time = time::format_duration(&agg.day);
+
+    let tasks_today: usize = model.task_sums.iter()
+        .filter(|(_, sum)| get_total_time(sum, &day_start, &utc_now) > chrono::Duration::zero())
+        .count();
+
+    let date_time = now.format("%a, %d %b %H:%M").to_string();
+
+    let left = Span::styled(" netupi", Style::default().fg(theme::TEXT).add_modifier(Modifier::BOLD));
+    let right = Span::styled(
+        format!("Today: {} ({} tasks)     {} ", today_time, tasks_today, date_time),
+        Style::default().fg(theme::HEADER_STATS),
+    );
+
+    let spacer_width = area.width.saturating_sub(left.width() as u16 + right.width() as u16);
+    let spacer = Span::raw(" ".repeat(spacer_width as usize));
+
+    Paragraph::new(Line::from(vec![left, spacer, right]))
         .render(area, buf);
 }
 
@@ -810,7 +827,7 @@ impl Widget for &mut App {
         ]);
         let [header_area, rest_area, footer_area] = vertical.areas(area);
 
-        render_title(header_area, buf);
+        render_title(&self.model, header_area, buf);
         self.render_main_widget(rest_area, buf);
         render_footer(&self.model, &self.active_widget, footer_area, buf);
 

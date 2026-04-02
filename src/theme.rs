@@ -9,6 +9,7 @@ pub const ROW_ALT_BG: Color = tailwind::SLATE.c900;
 
 pub const TEXT: Color = tailwind::SLATE.c200;
 pub const TEXT_SECONDARY: Color = tailwind::SLATE.c500;
+pub const HEADER_STATS: Color = tailwind::SLATE.c300;
 pub const TEXT_MUTED: Color = tailwind::SLATE.c600;
 pub const TEXT_INACTIVE: Color = tailwind::SLATE.c400;
 
