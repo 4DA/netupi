@@ -9,15 +9,13 @@ use chrono::prelude::*;
 
 use crossterm::event::{self, KeyCode};
 
-use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
+use ratatui::{prelude::*, widgets::*};
 
 use crate::task::*;
+use crate::theme;
 use crate::app_model::*;
 use crate::db;
 use crate::utils;
-
-const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
-const ALT_ROW_COLOR: Color = tailwind::SLATE.c900;
 
 pub struct TaskItem {
     pub uid: TaskID,
@@ -27,8 +25,8 @@ pub struct TaskItem {
 impl TaskItem {
     pub fn to_list_item(&self, index: usize) -> ListItem {
         let bg_color = match index % 2 {
-            0 => NORMAL_ROW_COLOR,
-            _ => ALT_ROW_COLOR,
+            0 => theme::ROW_BG,
+            _ => theme::ROW_ALT_BG,
         };
         let line = format!(" {}", self.name);
 

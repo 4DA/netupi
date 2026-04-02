@@ -9,7 +9,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
-use ratatui::{prelude::*, style::palette::tailwind, widgets::*};
+use ratatui::{prelude::*, widgets::*};
 
 use chrono::prelude::*;
 
@@ -17,6 +17,7 @@ use clap::Parser;
 
 use netupi::task::*;
 use netupi::task_editor::*;
+use netupi::theme;
 use netupi::db;
 use netupi::app_model::*;
 use netupi::task_list::*;
@@ -24,14 +25,6 @@ use netupi::task_details::*;
 use netupi::activity_log::*;
 use netupi::time;
 use netupi::widgets;
-
-const TODO_HEADER_BG: Color = tailwind::BLUE.c950;
-const NORMAL_ROW_COLOR: Color = tailwind::SLATE.c950;
-const ALT_ROW_COLOR: Color = tailwind::SLATE.c900;
-const SELECTED_STYLE_FG: Color = tailwind::BLUE.c300;
-const TEXT_COLOR: Color = tailwind::SLATE.c200;
-#[allow(unused)]
-const COMPLETED_TEXT_COLOR: Color = tailwind::GREEN.c500;
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
@@ -85,7 +78,7 @@ impl StatusList {
 
 fn filter_to_list_item(filter: &FocusFilter) -> ListItem {
     let line = filter.to_string();
-    ListItem::new(line).bg(NORMAL_ROW_COLOR)
+    ListItem::new(line).bg(theme::ROW_BG)
 }
 
 #[derive(PartialEq)]
@@ -315,15 +308,15 @@ impl App {
         let outer_block = Block::default()
             .borders(if self.active_widget == ActiveWidget::FocusWidget {Borders::all()} else {Borders::NONE})
             .padding(if self.active_widget != ActiveWidget::FocusWidget {Padding::symmetric(1, 0)} else {Padding::uniform(0)})
-            .fg(TEXT_COLOR)
-            .bg(TODO_HEADER_BG)
+            .fg(theme::TEXT)
+            .bg(theme::HEADER_BG)
             .title("Focus")
             .title_alignment(Alignment::Center);
 
         let inner_block = Block::default()
             .borders(Borders::NONE)
-            .fg(TEXT_COLOR)
-            .bg(NORMAL_ROW_COLOR);
+            .fg(theme::TEXT)
+            .bg(theme::ROW_BG);
 
         let outer_area = area;
         let inner_area = outer_block.inner(outer_area);
@@ -335,14 +328,7 @@ impl App {
         let is_active = self.active_widget == ActiveWidget::FocusWidget;
         let items = List::new(items)
             .block(inner_block)
-            .highlight_style(if is_active {
-                Style::default()
-                    .add_modifier(Modifier::BOLD)
-                    .add_modifier(Modifier::REVERSED)
-                    .fg(SELECTED_STYLE_FG)
-            } else {
-                Style::default().fg(tailwind::SLATE.c400)
-            })
+            .highlight_style(if is_active { theme::highlight_active() } else { theme::highlight_inactive() })
             .highlight_symbol(if is_active { ">" } else { " " })
             .highlight_spacing(HighlightSpacing::Always);
 
@@ -353,15 +339,15 @@ impl App {
         let outer_block = Block::default()
             .borders(if self.active_widget == ActiveWidget::TaskWidget {Borders::all()} else {Borders::NONE})
             .padding(if self.active_widget != ActiveWidget::TaskWidget {Padding::symmetric(1, 0)} else {Padding::uniform(0)})
-            .fg(TEXT_COLOR)
-            .bg(TODO_HEADER_BG)
+            .fg(theme::TEXT)
+            .bg(theme::HEADER_BG)
             .title("Task list")
             .title_alignment(Alignment::Center);
 
         let inner_block = Block::default()
             .borders(Borders::NONE)
-            .fg(TEXT_COLOR)
-            .bg(NORMAL_ROW_COLOR);
+            .fg(theme::TEXT)
+            .bg(theme::ROW_BG);
 
         let outer_area = area;
         let inner_area = outer_block.inner(outer_area);
@@ -375,8 +361,8 @@ impl App {
             .enumerate()
             .map(|(i, t)| {
                 let bg_color = match i % 2 {
-                    0 => NORMAL_ROW_COLOR,
-                    _ => ALT_ROW_COLOR,
+                    0 => theme::ROW_BG,
+                    _ => theme::ROW_ALT_BG,
                 };
 
                 let priority_indicator = match t.priority.into() {
@@ -393,21 +379,20 @@ impl App {
                 };
 
                 let line = format!("{}{}{}", tracking_indicator, priority_indicator, t.name);
-                ListItem::new(line).bg(bg_color)
+                let is_tracking = matches!(&self.model.tracking.state,
+                    TrackingState::Active(uid) if uid == &t.uid);
+                let mut item = ListItem::new(line).bg(bg_color);
+                if is_tracking {
+                    item = item.fg(theme::TRACKING_ACTIVE);
+                }
+                item
             })
             .collect();
 
         let is_active = self.active_widget == ActiveWidget::TaskWidget;
         let items = List::new(items)
             .block(inner_block)
-            .highlight_style(if is_active {
-                Style::default()
-                    .add_modifier(Modifier::BOLD)
-                    .add_modifier(Modifier::REVERSED)
-                    .fg(SELECTED_STYLE_FG)
-            } else {
-                Style::default().fg(tailwind::SLATE.c400)
-            })
+            .highlight_style(if is_active { theme::highlight_active() } else { theme::highlight_inactive() })
             .highlight_symbol(if is_active { ">" } else { " " })
             .highlight_spacing(HighlightSpacing::Always);
 
@@ -417,24 +402,24 @@ impl App {
     fn render_task_stats(&mut self, area: Rect, buf: &mut Buffer) {
         let outer_info_block = Block::default()
             .borders(Borders::NONE)
-            .fg(TEXT_COLOR)
-            .bg(TODO_HEADER_BG)
+            .fg(theme::TEXT)
+            .bg(theme::HEADER_BG)
             .title("Task stats")
             .title_alignment(Alignment::Center);
 
         let left_block = Block::default()
             .borders(Borders::NONE)
-            .bg(NORMAL_ROW_COLOR)
+            .bg(theme::ROW_BG)
             .padding(Padding::horizontal(1));
 
         let inner_info_block = Block::default()
             .borders(Borders::NONE)
-            .bg(NORMAL_ROW_COLOR)
+            .bg(theme::ROW_BG)
             .padding(Padding::horizontal(1));
 
         let retro_block = Block::default()
             .borders(Borders::NONE)
-            .bg(NORMAL_ROW_COLOR)
+            .bg(theme::ROW_BG)
             .padding(Padding::horizontal(1));
 
         let outer_info_area = area;
@@ -459,12 +444,12 @@ impl App {
 
         let captions_paragraph = Paragraph::new(captions)
             .block(left_block)
-            .fg(TEXT_COLOR)
+            .fg(theme::TEXT)
             .wrap(Wrap { trim: false });
 
         let info_paragraph = Paragraph::new(durations)
             .block(inner_info_block)
-            .fg(TEXT_COLOR)
+            .fg(theme::TEXT)
             .wrap(Wrap { trim: false });
 
 
@@ -481,7 +466,7 @@ impl App {
 
         let retro_paragraph = Paragraph::new(retro)
             .block(retro_block)
-            .fg(TEXT_COLOR)
+            .fg(theme::TEXT)
             .wrap(Wrap { trim: false });
 
         retro_paragraph.render(retro_area, buf);
@@ -491,19 +476,19 @@ impl App {
 
         let outer_info_block = Block::default()
             .borders(Borders::NONE)
-            .fg(TEXT_COLOR)
-            .bg(TODO_HEADER_BG)
+            .fg(theme::TEXT)
+            .bg(theme::HEADER_BG)
             .title("Total time log")
             .title_alignment(Alignment::Center);
 
         let left_block = Block::default()
             .borders(Borders::NONE)
-            .bg(NORMAL_ROW_COLOR)
+            .bg(theme::ROW_BG)
             .padding(Padding::horizontal(1));
 
         let right_block = Block::default()
             .borders(Borders::NONE)
-            .bg(NORMAL_ROW_COLOR)
+            .bg(theme::ROW_BG)
             .padding(Padding::horizontal(1));
 
         let outer_info_area = area;
@@ -524,12 +509,12 @@ impl App {
 
         let captions_paragraph = Paragraph::new(captions)
             .block(left_block)
-            .fg(TEXT_COLOR)
+            .fg(theme::TEXT)
             .wrap(Wrap { trim: false });
 
         let durations_paragraph = Paragraph::new(durations)
             .block(right_block)
-            .fg(TEXT_COLOR)
+            .fg(theme::TEXT)
             .wrap(Wrap { trim: false });
 
         captions_paragraph.render(left_area, buf);
@@ -542,14 +527,14 @@ impl App {
         let outer_info_block = Block::default()
             .borders(if is_active { Borders::ALL } else { Borders::NONE })
             .padding(if !is_active { Padding::symmetric(1, 0) } else { Padding::uniform(0) })
-            .fg(TEXT_COLOR)
-            .bg(TODO_HEADER_BG)
+            .fg(theme::TEXT)
+            .bg(theme::HEADER_BG)
             .title("Activity log")
             .title_alignment(Alignment::Center);
 
         let inner_info_block = Block::default()
             .borders(Borders::NONE)
-            .bg(NORMAL_ROW_COLOR)
+            .bg(theme::ROW_BG)
             .padding(Padding::horizontal(1));
 
         let outer_info_area = area;
@@ -565,14 +550,14 @@ impl App {
                 let is_killed = self.model.records_killed.contains(rec.0);
                 let is_cursor = i == self.log_cursor;
 
-                let mut style = Style::default().fg(TEXT_COLOR);
+                let mut style = Style::default().fg(theme::TEXT);
                 if is_killed {
-                    style = style.fg(tailwind::SLATE.c600).add_modifier(Modifier::CROSSED_OUT);
+                    style = theme::killed_record();
                 }
                 if is_cursor && is_active {
-                    style = style.add_modifier(Modifier::REVERSED);
+                    style = style.patch(theme::cursor_active());
                 } else if is_cursor {
-                    style = style.fg(tailwind::SLATE.c400);
+                    style = style.patch(theme::cursor_inactive());
                 }
 
                 lines.push(Line::from(Span::styled(text, style)));
@@ -601,10 +586,10 @@ fn render_editor(editor: &TaskEditor, area: Rect, buf: &mut Buffer) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(tailwind::BLUE.c400))
+        .border_style(theme::editor_border())
         .title(" Edit Task ")
         .title_alignment(Alignment::Center)
-        .bg(tailwind::SLATE.c950);
+        .bg(theme::ROW_BG);
 
     let inner = block.inner(popup);
     block.render(popup, buf);
@@ -658,9 +643,9 @@ fn render_editor(editor: &TaskEditor, area: Rect, buf: &mut Buffer) {
         };
 
         let style = if is_focused {
-            Style::default().fg(tailwind::BLUE.c300).add_modifier(Modifier::BOLD)
+            theme::editor_focused()
         } else {
-            Style::default().fg(TEXT_COLOR)
+            theme::editor_unfocused()
         };
 
         let color_preview = if *field == EditField::Color {
@@ -694,7 +679,7 @@ fn render_editor(editor: &TaskEditor, area: Rect, buf: &mut Buffer) {
             "j/k:nav  h/l:adjust  Enter:edit text  Ctrl-S:save  Esc:cancel"
         };
         Paragraph::new(help)
-            .style(Style::default().fg(tailwind::SLATE.c500))
+            .style(theme::help_editor())
             .render(help_area, buf);
     }
 }
@@ -732,7 +717,7 @@ fn render_footer(model: &AppModel, active_widget: &ActiveWidget, area: Rect, buf
     let status = get_status_string(model);
     Paragraph::new(status)
         .centered()
-        .fg(TEXT_COLOR)
+        .fg(theme::TEXT)
         .render(status_area, buf);
 
     // help line with bold keys
@@ -742,8 +727,8 @@ fn render_footer(model: &AppModel, active_widget: &ActiveWidget, area: Rect, buf
         if i > 0 {
             spans.push(Span::raw("  "));
         }
-        spans.push(Span::styled(format!(" {} ", key), Style::default().add_modifier(Modifier::BOLD).fg(TEXT_COLOR)));
-        spans.push(Span::styled(format!(" {} ", desc), Style::default().fg(tailwind::SLATE.c500)));
+        spans.push(Span::styled(format!(" {} ", key), theme::help_key()));
+        spans.push(Span::styled(format!(" {} ", desc), theme::help_desc()));
     }
 
     Paragraph::new(Line::from(spans))
