@@ -149,6 +149,7 @@ impl App {
             Char('n') => {
                 self.task_list.keymap_task_list(&mut self.model, key);
                 self.filter_list.update(&self.model.focus_filter);
+                self.active_widget = ActiveWidget::TaskWidget;
             }
             _ => {}
         }
@@ -340,7 +341,7 @@ impl App {
                     .add_modifier(Modifier::REVERSED)
                     .fg(SELECTED_STYLE_FG)
             } else {
-                Style::default().fg(TEXT_COLOR)
+                Style::default().fg(tailwind::SLATE.c400)
             })
             .highlight_symbol(if is_active { ">" } else { " " })
             .highlight_spacing(HighlightSpacing::Always);
@@ -405,7 +406,7 @@ impl App {
                     .add_modifier(Modifier::REVERSED)
                     .fg(SELECTED_STYLE_FG)
             } else {
-                Style::default().fg(TEXT_COLOR)
+                Style::default().fg(tailwind::SLATE.c400)
             })
             .highlight_symbol(if is_active { ">" } else { " " })
             .highlight_spacing(HighlightSpacing::Always);
@@ -562,14 +563,16 @@ impl App {
             if let Some(task) = self.model.tasks.get(&rec.1.uid) {
                 let text = format_time_record(task, &rec.1);
                 let is_killed = self.model.records_killed.contains(rec.0);
-                let is_selected = is_active && i == self.log_cursor;
+                let is_cursor = i == self.log_cursor;
 
                 let mut style = Style::default().fg(TEXT_COLOR);
                 if is_killed {
                     style = style.fg(tailwind::SLATE.c600).add_modifier(Modifier::CROSSED_OUT);
                 }
-                if is_selected {
+                if is_cursor && is_active {
                     style = style.add_modifier(Modifier::REVERSED);
+                } else if is_cursor {
+                    style = style.fg(tailwind::SLATE.c400);
                 }
 
                 lines.push(Line::from(Span::styled(text, style)));
