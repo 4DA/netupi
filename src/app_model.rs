@@ -1,13 +1,13 @@
-use druid::im::{OrdSet, Vector};
+use std::sync::mpsc::Receiver;
 
-use druid::{Data, TimerToken, Lens };
+use im::{OrdSet, Vector};
 
 use chrono::prelude::*;
 use std::rc::Rc;
 
 use crate::task::*;
 
-#[derive(Debug, Clone, Data)]
+#[derive(Debug, Clone)]
 pub enum TrackingState {
     Inactive,
     Active(String),
@@ -15,7 +15,7 @@ pub enum TrackingState {
     Break(String)
 }
 
-#[derive(Debug, Clone, PartialEq, Data)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FocusFilter {
     Status(TaskStatus),
     All
@@ -28,42 +28,74 @@ impl FocusFilter {
             FocusFilter::All => "All",
         }
     }
+
+    pub fn to_int(&self) -> u8 {
+        use FocusFilter::*;
+        match &self {
+            Status(TaskStatus::NeedsAction) => 0,
+            Status(TaskStatus::Completed) => 1,
+            Status(TaskStatus::InProcess) => 2,
+            Status(TaskStatus::Archived) => 3,
+            All => 4,
+        }
+    }
+
+    pub fn cycle_next(&self) -> Self {
+        use FocusFilter::*;
+        match self {
+            Status(TaskStatus::NeedsAction) => Status(TaskStatus::Completed),
+            Status(TaskStatus::Completed) => Status(TaskStatus::InProcess),
+            Status(TaskStatus::InProcess) => Status(TaskStatus::Archived),
+            Status(TaskStatus::Archived) => All,
+            All => Status(TaskStatus::NeedsAction)
+        }
+    }
+
+    pub fn cycle_prev(&self) -> Self {
+        use FocusFilter::*;
+        match self {
+            Status(TaskStatus::NeedsAction) => All,
+            Status(TaskStatus::Completed) => Status(TaskStatus::NeedsAction),
+            Status(TaskStatus::InProcess) => Status(TaskStatus::Completed),
+            Status(TaskStatus::Archived) => Status(TaskStatus::InProcess),
+            All => Status(TaskStatus::Archived)
+        }
+    }
 }
 
-#[derive(Debug, Clone, Data)]
+#[derive(Debug)]
+pub struct TimerTok
+{
+    pub channel: Receiver<u32>,
+}
+
+#[derive(Debug)]
 pub struct TrackingCtx {
     pub state: TrackingState,
     pub timestamp: Rc<DateTime<Utc>>,
-    pub timer_id: Rc<TimerToken>,
+    pub timer: Option<TimerTok>,
     pub elapsed: Rc<chrono::Duration>,
 }
 
-#[derive(Clone, Data, Lens)]
 pub struct AppModel {
     pub db: Rc<rusqlite::Connection>,
     pub tasks: TaskMap,
     pub records: TimeRecordMap,
-    pub records_killed: Rc<TimeRecordSet>,
+    pub records_killed: TimeRecordSet,
     pub task_sums: TaskSums,
     pub tags: OrdSet<String>,
     pub tracking: TrackingCtx,
     pub selected_task: Option<String>,
     pub focus_filter: FocusFilter,
     pub tag_filter: Option<String>,
-    pub hot_log_entry: Option<Rc<DateTime<Utc>>>,
-
-    pub show_task_edit: bool,
-    pub show_task_summary: bool
 }
 
 pub fn get_work_interval(model: &AppModel, uid: &String) -> chrono::Duration {
     *model.tasks.get(uid).unwrap().work_duration.clone()
-    // chrono::Duration::seconds(10)
 }
 
 pub fn get_rest_interval(model: &AppModel, uid: &String) -> chrono::Duration {
     *model.tasks.get(uid).unwrap().break_duration.clone()
-    // chrono::Duration::seconds(10)
 }
 
 impl AppModel {
@@ -102,7 +134,7 @@ impl AppModel {
 
         elems.sort_by(|v1: &&Task, v2: &&Task| v1.cmp(v2));
 
-        return elems.iter().map(|v| v.clone()).cloned().collect();
+        return elems.iter().cloned().cloned().collect();
     }
 
     pub fn get_uids_filtered(&self) -> Vector<String> {
@@ -111,11 +143,14 @@ impl AppModel {
 
     pub fn check_update_selected(&mut self) {
         if let Some(ref selected) = self.selected_task {
-            let mut filtered: Vector<String> = self.get_uids_filtered();
+            let filtered: Vector<String> = self.get_uids_filtered();
 
-            // select any task if currently selected is filtered out
             if !filtered.contains(selected) {
-                self.selected_task = filtered.pop_front();
+                self.selected_task = if filtered.is_empty() {
+                    None
+                } else {
+                    Some(filtered[0].clone())
+                };
             }
         }
     }
@@ -138,5 +173,33 @@ impl AppModel {
         self.tags.clear();
         self.tags = self.get_tags();
     }
-}
 
+    pub fn rebuild_task_sums(&mut self) {
+        for (uid, _) in &self.tasks {
+            let sum = build_time_prefix_sum(&self.tasks, &self.records,
+                                            uid.clone(), &self.records_killed);
+            self.task_sums.insert(uid.clone(), sum);
+        }
+    }
+
+    pub fn toggle_kill_record(&mut self, record_key: &DateTime<Utc>) {
+        if self.records_killed.contains(record_key) {
+            // unkill: re-insert into DB
+            if let Some(record) = self.records.get(record_key) {
+                if let Err(what) = crate::db::add_time_record(self.db.clone(), record) {
+                    eprintln!("db error: {}", what);
+                }
+            }
+            self.records_killed.remove(record_key);
+        } else {
+            // kill: remove from DB
+            if let Some(record) = self.records.get(record_key) {
+                if let Err(what) = crate::db::remove_time_record(self.db.clone(), record) {
+                    eprintln!("db error: {}", what);
+                }
+            }
+            self.records_killed.insert(record_key.clone());
+        }
+        self.rebuild_task_sums();
+    }
+}

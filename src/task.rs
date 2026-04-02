@@ -3,10 +3,9 @@ use std::ops::Add;
 use std::rc::Rc;
 use std::time::SystemTime;
 
-use druid::{Data, Lens, Color};
 use chrono::prelude::*;
 use chrono::Duration;
-use druid::im::{OrdSet, OrdMap};
+use im::{OrdSet, OrdMap};
 use serde::{Serialize, Serializer, Deserialize};
 use serde::ser::{SerializeSeq};
 
@@ -14,14 +13,15 @@ use serde::ser::{SerializeSeq};
 use uuid::v1::{Timestamp, Context};
 use uuid::Uuid;
 
-pub type TagSet        = OrdSet<String>;
-pub type TaskMap       = OrdMap<String, Task>;
+pub type TaskID        = String;
+pub type TagSet        = OrdSet<TaskID>;
+pub type TaskMap       = OrdMap<TaskID, Task>;
 pub type TimeRecordMap = OrdMap<DateTime<Utc>, TimeRecord>;
 pub type TimeRecordSet = OrdSet<DateTime<Utc>>;
 pub type TimePrefixSum = OrdMap<DateTime<Utc>, TimePrefix>;
-pub type TaskSums      = OrdMap::<String, TimePrefixSum>;
+pub type TaskSums      = OrdMap::<TaskID, TimePrefixSum>;
 
-#[derive(Debug, Clone, Data, PartialEq, Serialize, Deserialize, Eq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
 pub enum TaskStatus {
     NeedsAction,
     Completed,
@@ -37,12 +37,29 @@ impl TaskStatus {
             TaskStatus::Completed   => "Completed",
             TaskStatus::InProcess   => "In process",
             TaskStatus::Archived    => "Archived",
-            _ => {panic!("Unknown status {:?}", self);}
+        }
+    }
+
+    pub fn cycle_next(&self) -> Self {
+        match self {
+            TaskStatus::NeedsAction => TaskStatus::InProcess,
+            TaskStatus::InProcess   => TaskStatus::Completed,
+            TaskStatus::Completed   => TaskStatus::Archived,
+            TaskStatus::Archived    => TaskStatus::NeedsAction,
+        }
+    }
+
+    pub fn cycle_prev(&self) -> Self {
+        match self {
+            TaskStatus::NeedsAction => TaskStatus::Archived,
+            TaskStatus::InProcess   => TaskStatus::NeedsAction,
+            TaskStatus::Completed   => TaskStatus::InProcess,
+            TaskStatus::Archived    => TaskStatus::Completed,
         }
     }
 }
 
-#[derive(Debug, Clone, Data, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CuaPriority {
     Unspecified,
     Low,
@@ -61,6 +78,35 @@ impl From<u32> for CuaPriority {
     }
 }
 
+impl CuaPriority {
+    pub fn cycle_next(&self) -> Self {
+        match self {
+            CuaPriority::High => CuaPriority::Normal,
+            CuaPriority::Normal => CuaPriority::Low,
+            CuaPriority::Low => CuaPriority::High,
+            CuaPriority::Unspecified => CuaPriority::Normal,
+        }
+    }
+
+    pub fn cycle_prev(&self) -> Self {
+        match self {
+            CuaPriority::High => CuaPriority::Low,
+            CuaPriority::Normal => CuaPriority::High,
+            CuaPriority::Low => CuaPriority::Normal,
+            CuaPriority::Unspecified => CuaPriority::Normal,
+        }
+    }
+
+    pub fn label(&self) -> &str {
+        match self {
+            CuaPriority::High => "High",
+            CuaPriority::Normal => "Normal",
+            CuaPriority::Low => "Low",
+            CuaPriority::Unspecified => "Unspecified",
+        }
+    }
+}
+
 impl From<CuaPriority> for u32 {
     fn from(pri: CuaPriority) -> Self {
         match pri {
@@ -72,14 +118,9 @@ impl From<CuaPriority> for u32 {
     }
 }
 
-#[derive(Debug, Clone, Data, Lens)]
-pub struct TaskViewState {
-    pub skip_days: i64
-}
-
-#[derive(Debug, Clone, Data, Lens, Eq)]
+#[derive(Debug, Clone)]
 pub struct Task {
-    pub uid: String,
+    pub uid: TaskID,
     pub seq: u32,
     pub name: String,
     pub description: String,
@@ -88,10 +129,10 @@ pub struct Task {
     pub task_status: TaskStatus,
     pub work_duration: Rc<Duration>,
     pub break_duration: Rc<Duration>,
-    pub color: druid::Color,
+    pub color: u32,
 }
 
-#[derive(Debug, Clone, Data)]
+#[derive(Debug, Clone)]
 pub struct TimeRecord {
     pub from: Rc<DateTime<Utc>>,
     pub to: Rc<DateTime<Utc>>,
@@ -110,19 +151,19 @@ impl Ord for Task {
     }
 }
 
-
 impl PartialOrd for Task {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-
 impl PartialEq for Task {
     fn eq(&self, other: &Self) -> bool {
-        self.same(&other)
+        self.uid == other.uid && self.seq == other.seq
     }
 }
+
+impl Eq for Task {}
 
 impl TimeRecord {
     fn duration(&self) -> chrono::Duration {
@@ -141,7 +182,7 @@ impl Task {
         return Task{name, description, uid, tags, priority, task_status,
                     work_duration: Rc::new(work_duration),
                     break_duration: Rc::new(break_duration),
-                    seq, color: Color::BLACK};
+                    seq, color: 0};
     }
 
     pub fn new_simple(name: String) -> Task {
@@ -152,7 +193,7 @@ impl Task {
     }
 }
 
-#[derive(Debug, Clone, Data, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TimePrefix {
     duration: Rc<chrono::Duration>,
 }
@@ -218,19 +259,6 @@ pub fn get_total_time(prefix_sum: &TimePrefixSum, from: &DateTime::<Utc>, to: &D
     }
 }
 
-// pub fn get_time_by_days(prefix_sum: &TimePrefixSum, from: &DateTime::<Utc>, to: &DateTime::<Utc>)
-//     -> OrdMap<DateTime::<Utc>, chrono::Duration>
-// {
-//     let (before, after1) = prefix_sum.split(from);
-//     let (after, _) = after1.split(to);
-
-//     match (before.get_max(), after.get_max()) {
-//         (Some(min), Some(max)) => *max.1.duration - *min.1.duration,
-//         (None, Some(max)) => *max.1.duration,
-//             _ => Duration::zero(),
-//     }
-// }
-
 pub fn get_total_time_from_sums(sums: &TaskSums, from: &DateTime::<Utc>,
                                 to: &DateTime::<Utc>) -> chrono::Duration
 {
@@ -244,8 +272,6 @@ pub fn get_total_time_from_sums(sums: &TaskSums, from: &DateTime::<Utc>,
 }
 
 pub fn add_record_to_sum(sum_map: &mut TimePrefixSum, record: &TimeRecord) {
-    // handle case when  record is older than newest entry in sum_map
-
     if sum_map.is_empty() {
         let epoch_0 = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc);
         sum_map.insert(epoch_0, TimePrefix::new(&Duration::zero()));
