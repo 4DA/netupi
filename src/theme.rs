@@ -32,7 +32,6 @@ pub fn highlight_active() -> Style {
     Style::default()
         .fg(ACCENT)
         .add_modifier(Modifier::BOLD)
-        .add_modifier(Modifier::REVERSED)
 }
 
 pub fn highlight_inactive() -> Style {

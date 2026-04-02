@@ -390,12 +390,8 @@ impl App {
 
         let items: Vec<ListItem> = tasks
             .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                let bg_color = match i % 2 {
-                    0 => theme::ROW_BG,
-                    _ => theme::ROW_ALT_BG,
-                };
+            .map(|t| {
+                let bg_color = theme::ROW_BG;
 
                 let priority_indicator = match t.priority.into() {
                     CuaPriority::High => "! ",
@@ -410,27 +406,33 @@ impl App {
                     _ => "  ",
                 };
 
-                let line = format!("{}{}{}", tracking_indicator, priority_indicator, t.name);
                 let is_active = matches!(&self.model.tracking.state,
                     TrackingState::Active(uid) if uid == &t.uid);
                 let is_paused = matches!(&self.model.tracking.state,
                     TrackingState::Paused(uid) if uid == &t.uid);
-                let mut item = ListItem::new(line);
-                if is_active {
-                    item = item.fg(theme::TRACKING_ACTIVE).bg(bg_color);
-                } else if is_paused {
-                    item = item.bg(theme::TRACKING_PAUSED_BG);
+
+                let row_fg = if is_active { theme::TRACKING_ACTIVE } else { theme::TEXT };
+                let row_bg = if is_paused { theme::TRACKING_PAUSED_BG } else { bg_color };
+
+                let task_color = color_for_task(t);
+                let color_block = if task_color == Color::Reset {
+                    Span::styled(" ", Style::default())
                 } else {
-                    item = item.bg(bg_color);
-                }
-                item
+                    Span::styled(" ", Style::default().bg(task_color))
+                };
+                let text = Span::styled(
+                    format!("{}{}{}", tracking_indicator, priority_indicator, t.name),
+                    Style::default().fg(row_fg),
+                );
+
+                ListItem::new(Line::from(vec![color_block, text])).bg(row_bg)
             })
             .collect();
 
         let items = List::new(items)
             .block(inner_block)
             .highlight_style(if is_active { theme::highlight_active() } else { theme::highlight_inactive() })
-            .highlight_symbol(if is_active { ">" } else { " " })
+            .highlight_symbol(if is_active { "> " } else { "  " })
             .highlight_spacing(HighlightSpacing::Always);
 
         StatefulWidget::render(items, inner_area, buf, &mut self.task_list.state);

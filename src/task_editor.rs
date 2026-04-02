@@ -42,7 +42,7 @@ pub struct ColorEntry {
 }
 
 pub const COLOR_PALETTE: &[ColorEntry] = &[
-    ColorEntry { color: Color::Reset,        value: 0,  label: "Default" },
+    ColorEntry { color: Color::Reset,        value: 0,  label: "None" },
     ColorEntry { color: Color::Red,          value: 1,  label: "Red" },
     ColorEntry { color: Color::Green,        value: 2,  label: "Green" },
     ColorEntry { color: Color::Yellow,       value: 3,  label: "Yellow" },
