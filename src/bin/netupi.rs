@@ -385,24 +385,15 @@ impl App {
     fn render_focus(&mut self, area: Rect, buf: &mut Buffer) {
 
         let is_active = self.active_widget == ActiveWidget::FocusWidget;
-        let outer_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(if is_active { Style::default().fg(theme::BORDER_ACTIVE) } else { Style::default().fg(theme::BORDER_INACTIVE) })
-            .fg(theme::TEXT)
-            .bg(theme::HEADER_BG)
-            .title("Focus")
-            .title_style(if is_active { Style::default().fg(theme::TITLE_ACTIVE) } else { Style::default().fg(theme::TITLE_INACTIVE) })
-            .title_alignment(Alignment::Center);
+        let outer_block = pane_block("Focus", is_active);
 
         let inner_block = Block::default()
             .borders(Borders::NONE)
             .fg(theme::TEXT)
             .bg(theme::ROW_BG);
 
-        let outer_area = area;
-        let inner_area = outer_block.inner(outer_area);
-
-        outer_block.render(outer_area, buf);
+        let inner_area = outer_block.inner(area);
+        outer_block.render(area, buf);
 
         let items: Vec<ListItem> = self.filter_list.items.iter().map(|x| filter_to_list_item(x)).collect();
 
@@ -417,24 +408,15 @@ impl App {
 
     fn render_task_list(&mut self, area: Rect, buf: &mut Buffer) {
         let is_active = self.active_widget == ActiveWidget::TaskWidget;
-        let outer_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(if is_active { Style::default().fg(theme::BORDER_ACTIVE) } else { Style::default().fg(theme::BORDER_INACTIVE) })
-            .fg(theme::TEXT)
-            .bg(theme::HEADER_BG)
-            .title("Task list")
-            .title_style(if is_active { Style::default().fg(theme::TITLE_ACTIVE) } else { Style::default().fg(theme::TITLE_INACTIVE) })
-            .title_alignment(Alignment::Center);
+        let outer_block = pane_block("Task list", is_active);
 
         let inner_block = Block::default()
             .borders(Borders::NONE)
             .fg(theme::TEXT)
             .bg(theme::ROW_BG);
 
-        let outer_area = area;
-        let inner_area = outer_block.inner(outer_area);
-
-        outer_block.render(outer_area, buf);
+        let inner_area = outer_block.inner(area);
+        outer_block.render(area, buf);
 
         let tasks = self.model.get_tasks_filtered();
 
@@ -517,15 +499,7 @@ impl App {
         let [agg_area, retro_area] = vertical.areas(area);
 
         // --- aggregate stats ---
-        let agg_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::BORDER_INACTIVE))
-            .fg(theme::TEXT)
-            .bg(theme::HEADER_BG)
-            .title("Task stats")
-            .title_style(Style::default().fg(theme::TITLE_INACTIVE))
-            .title_alignment(Alignment::Center);
-
+        let agg_block = pane_block("Task stats", false);
         let agg_inner = agg_block.inner(agg_area);
         agg_block.render(agg_area, buf);
 
@@ -550,15 +524,7 @@ impl App {
             .render(dur_area, buf);
 
         // --- daily retrospective ---
-        let retro_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::BORDER_INACTIVE))
-            .fg(theme::TEXT)
-            .bg(theme::HEADER_BG)
-            .title("Daily")
-            .title_style(Style::default().fg(theme::TITLE_INACTIVE))
-            .title_alignment(Alignment::Center);
-
+        let retro_block = pane_block("Daily", false);
         let retro_inner = retro_block.inner(retro_area);
         retro_block.render(retro_area, buf);
 
@@ -576,14 +542,7 @@ impl App {
 
     fn render_total_time_log(&mut self, area: Rect, buf: &mut Buffer) {
 
-        let outer_info_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::BORDER_INACTIVE))
-            .fg(theme::TEXT)
-            .bg(theme::HEADER_BG)
-            .title("Total time log")
-            .title_style(Style::default().fg(theme::TITLE_INACTIVE))
-            .title_alignment(Alignment::Center);
+        let outer_block = pane_block("Total time log", false);
 
         let left_block = Block::default()
             .borders(Borders::NONE)
@@ -595,10 +554,8 @@ impl App {
             .bg(theme::ROW_BG)
             .padding(Padding::horizontal(1));
 
-        let outer_info_area = area;
-        let inner_info_area = outer_info_block.inner(outer_info_area);
-
-        outer_info_block.render(outer_info_area, buf);
+        let inner_info_area = outer_block.inner(area);
+        outer_block.render(area, buf);
 
         let captions:String = "Today\nWeek\nMonth\nYear\nAll time".into();
         let agg = time::get_durations(&self.model.task_sums);
@@ -628,24 +585,15 @@ impl App {
     fn render_activity_log(&mut self, area: Rect, buf: &mut Buffer) {
         let is_active = self.active_widget == ActiveWidget::ActivityLogWidget;
 
-        let outer_info_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(if is_active { Style::default().fg(theme::BORDER_ACTIVE) } else { Style::default().fg(theme::BORDER_INACTIVE) })
-            .fg(theme::TEXT)
-            .bg(theme::HEADER_BG)
-            .title("Activity log")
-            .title_style(if is_active { Style::default().fg(theme::TITLE_ACTIVE) } else { Style::default().fg(theme::TITLE_INACTIVE) })
-            .title_alignment(Alignment::Center);
+        let outer_block = pane_block("Activity log", is_active);
 
         let inner_info_block = Block::default()
             .borders(Borders::NONE)
             .bg(theme::ROW_BG)
             .padding(Padding::horizontal(1));
 
-        let outer_info_area = area;
-        let inner_info_area = outer_info_block.inner(outer_info_area);
-
-        outer_info_block.render(outer_info_area, buf);
+        let inner_info_area = outer_block.inner(area);
+        outer_block.render(area, buf);
 
         let mut lines: Vec<Line> = Vec::new();
 
@@ -676,6 +624,17 @@ impl App {
 
         log_paragraph.render(inner_info_area, buf);
     }
+}
+
+fn pane_block(title: &str, is_active: bool) -> Block {
+    Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(if is_active { theme::BORDER_ACTIVE } else { theme::BORDER_INACTIVE }))
+        .fg(theme::TEXT)
+        .bg(theme::HEADER_BG)
+        .title(title.to_string())
+        .title_style(Style::default().fg(if is_active { theme::TITLE_ACTIVE } else { theme::TITLE_INACTIVE }))
+        .title_alignment(Alignment::Center)
 }
 
 fn render_editor(editor: &TaskEditor, area: Rect, buf: &mut Buffer) {
