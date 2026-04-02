@@ -91,7 +91,8 @@ fn filter_to_list_item(filter: &FocusFilter) -> ListItem {
 #[derive(PartialEq)]
 enum ActiveWidget {
     TaskWidget,
-    FocusWidget
+    FocusWidget,
+    ActivityLogWidget,
 }
 
 enum AppMode {
@@ -105,6 +106,7 @@ struct App {
     filter_list: StatusList,
     active_widget: ActiveWidget,
     mode: AppMode,
+    log_cursor: usize,
 }
 
 impl App {
@@ -127,7 +129,7 @@ impl App {
         let task_list = TaskList{state, items, last_selected};
         let filter_list = StatusList::new(&model.focus_filter);
 
-        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget, mode: AppMode::Browse};
+        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget, mode: AppMode::Browse, log_cursor: 0};
     }
 
     fn keymap_filter_list(&mut self, key: event::KeyCode) {
@@ -143,6 +145,34 @@ impl App {
                 self.model.focus_filter = self.model.focus_filter.cycle_prev();
                 self.filter_list.update(&self.model.focus_filter);
                 self.task_list.update(&self.model);
+            }
+            _ => {}
+        }
+    }
+
+    fn get_log_records(&self) -> Vec<DateTime<Utc>> {
+        self.model.records.keys().rev().cloned().collect()
+    }
+
+    fn keymap_activity_log(&mut self, key: event::KeyCode) {
+        use KeyCode::*;
+        let record_keys = self.get_log_records();
+        let count = record_keys.len();
+        if count == 0 { return; }
+
+        match key {
+            Char('j') | Down => {
+                self.log_cursor = (self.log_cursor + 1).min(count - 1);
+            }
+            Char('k') | Up => {
+                if self.log_cursor > 0 {
+                    self.log_cursor -= 1;
+                }
+            }
+            Char('x') => {
+                if let Some(key) = record_keys.get(self.log_cursor) {
+                    self.model.toggle_kill_record(key);
+                }
             }
             _ => {}
         }
@@ -202,12 +232,11 @@ impl App {
                                     Char('e') if self.active_widget == ActiveWidget::TaskWidget => {
                                         self.start_editing();
                                     }
-                                    Left | Char('h') => self.active_widget = ActiveWidget::FocusWidget,
-                                    Right | Char('l') => self.active_widget = ActiveWidget::TaskWidget,
                                     Tab => {
                                         self.active_widget = match self.active_widget {
-                                            ActiveWidget::TaskWidget => ActiveWidget::FocusWidget,
                                             ActiveWidget::FocusWidget => ActiveWidget::TaskWidget,
+                                            ActiveWidget::TaskWidget => ActiveWidget::ActivityLogWidget,
+                                            ActiveWidget::ActivityLogWidget => ActiveWidget::FocusWidget,
                                         };
                                     }
                                     _ => match self.active_widget {
@@ -216,6 +245,7 @@ impl App {
                                             self.filter_list.update(&self.model.focus_filter);
                                         },
                                         ActiveWidget::FocusWidget => self.keymap_filter_list(key.code),
+                                        ActiveWidget::ActivityLogWidget => self.keymap_activity_log(key.code),
                                     }
                                 }
                             }
@@ -489,8 +519,11 @@ impl App {
     }
 
     fn render_activity_log(&mut self, area: Rect, buf: &mut Buffer) {
+        let is_active = self.active_widget == ActiveWidget::ActivityLogWidget;
+
         let outer_info_block = Block::default()
-            .borders(Borders::NONE)
+            .borders(if is_active { Borders::ALL } else { Borders::NONE })
+            .padding(if !is_active { Padding::symmetric(1, 0) } else { Padding::uniform(0) })
             .fg(TEXT_COLOR)
             .bg(TODO_HEADER_BG)
             .title("Activity log")
@@ -506,19 +539,30 @@ impl App {
 
         outer_info_block.render(outer_info_area, buf);
 
-        let mut log_strings:String = String::new();
+        let mut lines: Vec<Line> = Vec::new();
 
-        for rec in self.model.records.iter().rev() {
+        for (i, rec) in self.model.records.iter().rev().enumerate() {
             if let Some(task) = self.model.tasks.get(&rec.1.uid) {
-                log_strings.push_str(&format_time_record(task, &rec.1));
-                log_strings.push_str("\n");
+                let text = format_time_record(task, &rec.1);
+                let is_killed = self.model.records_killed.contains(rec.0);
+                let is_selected = is_active && i == self.log_cursor;
+
+                let mut style = Style::default().fg(TEXT_COLOR);
+                if is_killed {
+                    style = style.fg(tailwind::SLATE.c600).add_modifier(Modifier::CROSSED_OUT);
+                }
+                if is_selected {
+                    style = style.add_modifier(Modifier::REVERSED);
+                }
+
+                lines.push(Line::from(Span::styled(text, style)));
             }
         }
 
-        let log_paragraph = Paragraph::new(log_strings)
+        let log_paragraph = Paragraph::new(lines)
             .block(inner_info_block)
-            .fg(TEXT_COLOR)
-            .wrap(Wrap { trim: false });
+            .scroll((self.log_cursor.saturating_sub(
+                inner_info_area.height.saturating_sub(2) as usize) as u16, 0));
 
         log_paragraph.render(inner_info_area, buf);
     }
@@ -642,12 +686,15 @@ fn render_title(area: Rect, buf: &mut Buffer) {
         .render(area, buf);
 }
 
-fn render_footer(model: &AppModel, area: Rect, buf: &mut Buffer) {
+fn render_footer(model: &AppModel, active_widget: &ActiveWidget, area: Rect, buf: &mut Buffer) {
     let status = get_status_string(model);
-    let help = if model.focus_filter == FocusFilter::Status(TaskStatus::Archived) {
-        " q:quit  n:new  e:edit  d:delete  Tab:switch"
-    } else {
-        " q:quit  space:start/pause  Esc:stop  n:new  e:edit  c:complete  a:archive  Tab:switch"
+    let help = match active_widget {
+        ActiveWidget::ActivityLogWidget =>
+            " j/k:nav  x:kill/unkill  Tab:switch  q:quit",
+        _ if model.focus_filter == FocusFilter::Status(TaskStatus::Archived) =>
+            " q:quit  n:new  e:edit  d:delete  Tab:switch",
+        _ =>
+            " q:quit  space:start/pause  Esc:stop  n:new  e:edit  c:complete  a:archive  Tab:switch",
     };
 
     let footer_text = if status.is_empty() {
@@ -674,7 +721,7 @@ impl Widget for &mut App {
 
         render_title(header_area, buf);
         self.render_main_widget(rest_area, buf);
-        render_footer(&self.model, footer_area, buf);
+        render_footer(&self.model, &self.active_widget, footer_area, buf);
 
         if let AppMode::Editing { ref editor, .. } = self.mode {
             render_editor(editor, area, buf);
@@ -712,7 +759,7 @@ pub fn main() -> anyhow::Result<()> {
         db,
         tasks,
         records,
-        records_killed: Rc::new(TimeRecordSet::new()),
+        records_killed: TimeRecordSet::new(),
         task_sums,
         tags,
         tracking: TrackingCtx{state: TrackingState::Inactive,

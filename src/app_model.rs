@@ -81,7 +81,7 @@ pub struct AppModel {
     pub db: Rc<rusqlite::Connection>,
     pub tasks: TaskMap,
     pub records: TimeRecordMap,
-    pub records_killed: Rc<TimeRecordSet>,
+    pub records_killed: TimeRecordSet,
     pub task_sums: TaskSums,
     pub tags: OrdSet<String>,
     pub tracking: TrackingCtx,
@@ -172,5 +172,34 @@ impl AppModel {
     pub fn update_tags(&mut self) {
         self.tags.clear();
         self.tags = self.get_tags();
+    }
+
+    pub fn rebuild_task_sums(&mut self) {
+        for (uid, _) in &self.tasks {
+            let sum = build_time_prefix_sum(&self.tasks, &self.records,
+                                            uid.clone(), &self.records_killed);
+            self.task_sums.insert(uid.clone(), sum);
+        }
+    }
+
+    pub fn toggle_kill_record(&mut self, record_key: &DateTime<Utc>) {
+        if self.records_killed.contains(record_key) {
+            // unkill: re-insert into DB
+            if let Some(record) = self.records.get(record_key) {
+                if let Err(what) = crate::db::add_time_record(self.db.clone(), record) {
+                    eprintln!("db error: {}", what);
+                }
+            }
+            self.records_killed.remove(record_key);
+        } else {
+            // kill: remove from DB
+            if let Some(record) = self.records.get(record_key) {
+                if let Err(what) = crate::db::remove_time_record(self.db.clone(), record) {
+                    eprintln!("db error: {}", what);
+                }
+            }
+            self.records_killed.insert(record_key.clone());
+        }
+        self.rebuild_task_sums();
     }
 }
