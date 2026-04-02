@@ -143,10 +143,14 @@ impl AppModel {
 
     pub fn check_update_selected(&mut self) {
         if let Some(ref selected) = self.selected_task {
-            let mut filtered: Vector<String> = self.get_uids_filtered();
+            let filtered: Vector<String> = self.get_uids_filtered();
 
             if !filtered.contains(selected) {
-                self.selected_task = filtered.pop_front();
+                self.selected_task = if filtered.is_empty() {
+                    None
+                } else {
+                    Some(filtered[0].clone())
+                };
             }
         }
     }

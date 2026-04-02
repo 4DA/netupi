@@ -131,6 +131,7 @@ impl TaskList {
                     eprintln!("db error: {}", what);
                 }
 
+                model.focus_filter = FocusFilter::Status(task.task_status.clone());
                 model.selected_task = Some(task.uid.clone());
                 model.tasks.insert(uid.clone(), task);
                 model.task_sums.insert(uid.clone(), TimePrefixSum::new());
@@ -141,6 +142,7 @@ impl TaskList {
             // c: mark completed
             Char('c') => {
                 if let Some(selected) = model.selected_task.clone() {
+                    let old_idx = self.state.selected().unwrap_or(0);
                     let mut task = model.tasks.get(&selected).expect("unknown uid").clone();
                     task.task_status = TaskStatus::Completed;
 
@@ -159,7 +161,13 @@ impl TaskList {
                     };
 
                     model.tasks = model.tasks.update(selected, task);
-                    model.check_update_selected();
+                    let filtered = model.get_uids_filtered();
+                    model.selected_task = if filtered.is_empty() {
+                        None
+                    } else {
+                        let idx = old_idx.min(filtered.len() - 1);
+                        Some(filtered[idx].clone())
+                    };
                     self.update(model);
                 }
             },
@@ -167,7 +175,15 @@ impl TaskList {
             // a: archive task
             Char('a') => {
                 if let Some(ref selected) = model.selected_task.clone() {
+                    let old_idx = self.state.selected().unwrap_or(0);
                     archive_task(model, selected);
+                    let filtered = model.get_uids_filtered();
+                    model.selected_task = if filtered.is_empty() {
+                        None
+                    } else {
+                        let idx = old_idx.min(filtered.len() - 1);
+                        Some(filtered[idx].clone())
+                    };
                     self.update(model);
                 }
             },
