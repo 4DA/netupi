@@ -1,4 +1,5 @@
 pub mod task;
+pub mod task_editor;
 pub mod db;
 pub mod app_model;
 pub mod task_list;

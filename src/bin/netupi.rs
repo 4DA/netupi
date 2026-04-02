@@ -16,6 +16,7 @@ use chrono::prelude::*;
 use clap::Parser;
 
 use netupi::task::*;
+use netupi::task_editor::*;
 use netupi::db;
 use netupi::app_model::*;
 use netupi::task_list::*;
@@ -93,11 +94,17 @@ enum ActiveWidget {
     FocusWidget
 }
 
+enum AppMode {
+    Browse,
+    Editing { editor: TaskEditor, original_uid: String },
+}
+
 struct App {
     model: AppModel,
     task_list: TaskList,
     filter_list: StatusList,
-    active_widget: ActiveWidget
+    active_widget: ActiveWidget,
+    mode: AppMode,
 }
 
 impl App {
@@ -120,7 +127,7 @@ impl App {
         let task_list = TaskList{state, items, last_selected};
         let filter_list = StatusList::new(&model.focus_filter);
 
-        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget};
+        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget, mode: AppMode::Browse};
     }
 
     fn keymap_filter_list(&mut self, key: event::KeyCode) {
@@ -141,6 +148,35 @@ impl App {
         }
     }
 
+    fn start_editing(&mut self) {
+        if let Some(ref uid) = self.model.selected_task {
+            if let Some(task) = self.model.tasks.get(uid) {
+                let editor = TaskEditor::from_task(task);
+                self.mode = AppMode::Editing { editor, original_uid: uid.clone() };
+            }
+        }
+    }
+
+    fn finish_editing(&mut self) {
+        if let AppMode::Editing { ref editor, ref original_uid } = self.mode {
+            if let Some(original) = self.model.tasks.get(original_uid) {
+                let updated = editor.to_task(&original);
+                if let Err(what) = db::update_task(self.model.db.clone(), &updated) {
+                    eprintln!("db error: {}", what);
+                }
+                self.model.tasks = self.model.tasks.update(original_uid.clone(), updated);
+                self.model.update_tags();
+                self.task_list.update(&self.model);
+                self.filter_list.update(&self.model.focus_filter);
+            }
+        }
+        self.mode = AppMode::Browse;
+    }
+
+    fn cancel_editing(&mut self) {
+        self.mode = AppMode::Browse;
+    }
+
     fn run(&mut self, mut terminal: Terminal<impl Backend>) -> io::Result<()> {
 
         loop {
@@ -151,23 +187,37 @@ impl App {
             if poll(std::time::Duration::from_millis(500))? {
                 if let Event::Key(key) = event::read()? {
                     if key.kind == KeyEventKind::Press {
-                        use KeyCode::*;
-                        match key.code {
-                            Char('q') => return Ok(()),
-                            Left | Char('h') => self.active_widget = ActiveWidget::FocusWidget,
-                            Right | Char('l') => self.active_widget = ActiveWidget::TaskWidget,
-                            Tab => {
-                                self.active_widget = match self.active_widget {
-                                    ActiveWidget::TaskWidget => ActiveWidget::FocusWidget,
-                                    ActiveWidget::FocusWidget => ActiveWidget::TaskWidget,
-                                };
+                        match &mut self.mode {
+                            AppMode::Editing { ref mut editor, .. } => {
+                                match editor.handle_key(key) {
+                                    EditAction::Confirm => self.finish_editing(),
+                                    EditAction::Cancel => self.cancel_editing(),
+                                    EditAction::Continue => {}
+                                }
                             }
-                            _ => match self.active_widget {
-                                ActiveWidget::TaskWidget => {
-                                    self.task_list.keymap_task_list(&mut self.model, key.code);
-                                    self.filter_list.update(&self.model.focus_filter);
-                                },
-                                ActiveWidget::FocusWidget => self.keymap_filter_list(key.code),
+                            AppMode::Browse => {
+                                use KeyCode::*;
+                                match key.code {
+                                    Char('q') => return Ok(()),
+                                    Char('e') if self.active_widget == ActiveWidget::TaskWidget => {
+                                        self.start_editing();
+                                    }
+                                    Left | Char('h') => self.active_widget = ActiveWidget::FocusWidget,
+                                    Right | Char('l') => self.active_widget = ActiveWidget::TaskWidget,
+                                    Tab => {
+                                        self.active_widget = match self.active_widget {
+                                            ActiveWidget::TaskWidget => ActiveWidget::FocusWidget,
+                                            ActiveWidget::FocusWidget => ActiveWidget::TaskWidget,
+                                        };
+                                    }
+                                    _ => match self.active_widget {
+                                        ActiveWidget::TaskWidget => {
+                                            self.task_list.keymap_task_list(&mut self.model, key.code);
+                                            self.filter_list.update(&self.model.focus_filter);
+                                        },
+                                        ActiveWidget::FocusWidget => self.keymap_filter_list(key.code),
+                                    }
+                                }
                             }
                         }
                     }
@@ -474,6 +524,117 @@ impl App {
     }
 }
 
+fn render_editor(editor: &TaskEditor, area: Rect, buf: &mut Buffer) {
+    // centered popup
+    let popup_width = 60u16.min(area.width.saturating_sub(4));
+    let popup_height = 18u16.min(area.height.saturating_sub(4));
+    let x = area.x + (area.width.saturating_sub(popup_width)) / 2;
+    let y = area.y + (area.height.saturating_sub(popup_height)) / 2;
+    let popup = Rect::new(x, y, popup_width, popup_height);
+
+    // clear background
+    Clear.render(popup, buf);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(tailwind::BLUE.c400))
+        .title(" Edit Task ")
+        .title_alignment(Alignment::Center)
+        .bg(tailwind::SLATE.c950);
+
+    let inner = block.inner(popup);
+    block.render(popup, buf);
+
+    let label_width = 14u16;
+    let fields: Vec<(EditField, &str, String)> = vec![
+        (EditField::Name, "Name", editor.name.clone()),
+        (EditField::Priority, "Priority", editor.priority.label().to_string()),
+        (EditField::Status, "Status", editor.status.to_string().to_string()),
+        (EditField::WorkMinutes, "Work (min)", format!("{}", editor.work_minutes)),
+        (EditField::BreakMinutes, "Break (min)", format!("{}", editor.break_minutes)),
+        (EditField::Tags, "Tags", {
+            let tags: Vec<String> = editor.tags.iter().enumerate().map(|(i, t)| {
+                if editor.focused_field == EditField::Tags && i == editor.tag_cursor {
+                    format!("[{}]", t)
+                } else {
+                    t.clone()
+                }
+            }).collect();
+            let s = tags.join(", ");
+            if editor.editing_tag {
+                format!("{} + {}_", s, editor.tag_input)
+            } else {
+                s
+            }
+        }),
+        (EditField::Description, "Description", editor.description.clone()),
+        (EditField::Color, "Color", COLOR_PALETTE[editor.color_index].label.to_string()),
+    ];
+
+    for (i, (field, label, value)) in fields.iter().enumerate() {
+        let row_y = inner.y + i as u16;
+        if row_y >= inner.y + inner.height.saturating_sub(1) {
+            break;
+        }
+        let row = Rect::new(inner.x, row_y, inner.width, 1);
+
+        let is_focused = editor.focused_field == *field;
+        let is_text_editing = is_focused && editor.editing_text;
+
+        let display_value = if is_text_editing {
+            let (text, cursor) = editor.current_text_display();
+            let mut s = text.to_string();
+            // show cursor position with a block char
+            if cursor <= s.len() {
+                s.insert(cursor, '|');
+            }
+            s
+        } else {
+            value.clone()
+        };
+
+        let style = if is_focused {
+            Style::default().fg(tailwind::BLUE.c300).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(TEXT_COLOR)
+        };
+
+        let color_preview = if *field == EditField::Color {
+            Style::default().fg(COLOR_PALETTE[editor.color_index].color)
+        } else {
+            style
+        };
+
+        // render label
+        let label_area = Rect::new(row.x + 1, row.y, label_width, 1);
+        let value_area = Rect::new(row.x + 1 + label_width, row.y, row.width.saturating_sub(label_width + 2), 1);
+
+        Paragraph::new(format!("{}:", label))
+            .style(style)
+            .render(label_area, buf);
+
+        Paragraph::new(display_value)
+            .style(color_preview)
+            .render(value_area, buf);
+    }
+
+    // help line at bottom of popup
+    let help_y = inner.y + inner.height.saturating_sub(1);
+    if help_y > inner.y {
+        let help_area = Rect::new(inner.x + 1, help_y, inner.width.saturating_sub(2), 1);
+        let help = if editor.editing_text {
+            "Enter:confirm  Esc:cancel"
+        } else if editor.editing_tag {
+            "Enter:add tag  Esc:cancel"
+        } else {
+            "j/k:nav  h/l:adjust  Enter:edit text  Ctrl-S:save  Esc:cancel"
+        };
+        Paragraph::new(help)
+            .style(Style::default().fg(tailwind::SLATE.c500))
+            .render(help_area, buf);
+    }
+}
+
 fn render_title(area: Rect, buf: &mut Buffer) {
     Paragraph::new("netupi")
         .bold()
@@ -483,7 +644,7 @@ fn render_title(area: Rect, buf: &mut Buffer) {
 
 fn render_footer(model: &AppModel, area: Rect, buf: &mut Buffer) {
     let status = get_status_string(model);
-    let help = " q:quit  space:start/pause  Esc:stop  n:new  c:complete  a:archive  Tab:switch";
+    let help = " q:quit  space:start/pause  Esc:stop  n:new  e:edit  c:complete  a:archive  Tab:switch";
 
     let footer_text = if status.is_empty() {
         help.to_string()
@@ -510,6 +671,10 @@ impl Widget for &mut App {
         render_title(header_area, buf);
         self.render_main_widget(rest_area, buf);
         render_footer(&self.model, footer_area, buf);
+
+        if let AppMode::Editing { ref editor, .. } = self.mode {
+            render_editor(editor, area, buf);
+        }
     }
 }
 

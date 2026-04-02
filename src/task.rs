@@ -39,6 +39,24 @@ impl TaskStatus {
             TaskStatus::Archived    => "Archived",
         }
     }
+
+    pub fn cycle_next(&self) -> Self {
+        match self {
+            TaskStatus::NeedsAction => TaskStatus::InProcess,
+            TaskStatus::InProcess   => TaskStatus::Completed,
+            TaskStatus::Completed   => TaskStatus::Archived,
+            TaskStatus::Archived    => TaskStatus::NeedsAction,
+        }
+    }
+
+    pub fn cycle_prev(&self) -> Self {
+        match self {
+            TaskStatus::NeedsAction => TaskStatus::Archived,
+            TaskStatus::InProcess   => TaskStatus::NeedsAction,
+            TaskStatus::Completed   => TaskStatus::InProcess,
+            TaskStatus::Archived    => TaskStatus::Completed,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,6 +74,35 @@ impl From<u32> for CuaPriority {
             5 => CuaPriority::Normal,
             6..=9 => CuaPriority::Low,
             _ => CuaPriority::Unspecified,
+        }
+    }
+}
+
+impl CuaPriority {
+    pub fn cycle_next(&self) -> Self {
+        match self {
+            CuaPriority::High => CuaPriority::Normal,
+            CuaPriority::Normal => CuaPriority::Low,
+            CuaPriority::Low => CuaPriority::High,
+            CuaPriority::Unspecified => CuaPriority::Normal,
+        }
+    }
+
+    pub fn cycle_prev(&self) -> Self {
+        match self {
+            CuaPriority::High => CuaPriority::Low,
+            CuaPriority::Normal => CuaPriority::High,
+            CuaPriority::Low => CuaPriority::Normal,
+            CuaPriority::Unspecified => CuaPriority::Normal,
+        }
+    }
+
+    pub fn label(&self) -> &str {
+        match self {
+            CuaPriority::High => "High",
+            CuaPriority::Normal => "Normal",
+            CuaPriority::Low => "Low",
+            CuaPriority::Unspecified => "Unspecified",
         }
     }
 }
