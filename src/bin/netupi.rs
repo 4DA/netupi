@@ -302,13 +302,13 @@ impl App {
 
         let horizontal = Layout::horizontal([
             Constraint::Length(20),
-            Constraint::Min(0),
+            Constraint::Min(30),
             Constraint::Length(45),
         ]);
 
         let vertical = Layout::vertical([
-            Constraint::Min(20),
-            Constraint::Min(20),
+            Constraint::Percentage(50),
+            Constraint::Percentage(50),
         ]);
 
         let right_vertical = Layout::vertical([
