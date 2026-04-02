@@ -644,7 +644,11 @@ fn render_title(area: Rect, buf: &mut Buffer) {
 
 fn render_footer(model: &AppModel, area: Rect, buf: &mut Buffer) {
     let status = get_status_string(model);
-    let help = " q:quit  space:start/pause  Esc:stop  n:new  e:edit  c:complete  a:archive  Tab:switch";
+    let help = if model.focus_filter == FocusFilter::Status(TaskStatus::Archived) {
+        " q:quit  n:new  e:edit  d:delete  Tab:switch"
+    } else {
+        " q:quit  space:start/pause  Esc:stop  n:new  e:edit  c:complete  a:archive  Tab:switch"
+    };
 
     let footer_text = if status.is_empty() {
         help.to_string()

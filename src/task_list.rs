@@ -172,6 +172,42 @@ impl TaskList {
                 }
             },
 
+            // d: permanently delete archived task
+            Char('d') => {
+                if model.focus_filter == FocusFilter::Status(TaskStatus::Archived) {
+                    if let Some(ref selected) = model.selected_task.clone() {
+                        let old_idx = self.state.selected().unwrap_or(0);
+
+                        if let Err(what) = db::delete_task(model.db.clone(), selected) {
+                            eprintln!("db error: {}", what);
+                        }
+                        if let Err(what) = db::delete_time_records_for_task(model.db.clone(), selected) {
+                            eprintln!("db error: {}", what);
+                        }
+
+                        let keys_to_remove: Vec<_> = model.records.iter()
+                            .filter(|(_, r)| &r.uid == selected)
+                            .map(|(k, _)| k.clone())
+                            .collect();
+                        for k in keys_to_remove {
+                            model.records.remove(&k);
+                        }
+                        model.task_sums.remove(selected);
+                        model.tasks.remove(selected);
+                        model.update_tags();
+
+                        let filtered = model.get_uids_filtered();
+                        model.selected_task = if filtered.is_empty() {
+                            None
+                        } else {
+                            let idx = old_idx.min(filtered.len() - 1);
+                            Some(filtered[idx].clone())
+                        };
+                        self.update(model);
+                    }
+                }
+            },
+
             // a: archive task
             Char('a') => {
                 if let Some(ref selected) = model.selected_task.clone() {

@@ -185,6 +185,14 @@ pub fn add_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::Res
     Ok(())
 }
 
+pub fn delete_time_records_for_task(conn: Rc<Connection>, uid: &String) -> anyhow::Result<()> {
+    conn.execute(
+        "DELETE FROM time_records WHERE uid = ?1",
+        &[uid],
+    )?;
+    Ok(())
+}
+
 pub fn remove_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::Result<()>
 {
     conn.execute(
