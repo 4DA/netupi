@@ -23,6 +23,8 @@ pub const PROGRESS_BAR_WORK: Color = tailwind::ORANGE.c900;
 pub const PROGRESS_BAR_BREAK: Color = tailwind::CYAN.c900;
 pub const BORDER_ACTIVE: Color = tailwind::BLUE.c400;
 pub const BORDER_INACTIVE: Color = tailwind::SLATE.c700;
+pub const TITLE_ACTIVE: Color = tailwind::BLUE.c300;
+pub const TITLE_INACTIVE: Color = tailwind::SLATE.c300;
 
 // --- Composite styles ---
 

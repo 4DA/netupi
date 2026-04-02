@@ -341,6 +341,7 @@ impl App {
             .fg(theme::TEXT)
             .bg(theme::HEADER_BG)
             .title("Focus")
+            .title_style(if is_active { Style::default().fg(theme::TITLE_ACTIVE) } else { Style::default().fg(theme::TITLE_INACTIVE) })
             .title_alignment(Alignment::Center);
 
         let inner_block = Block::default()
@@ -372,6 +373,7 @@ impl App {
             .fg(theme::TEXT)
             .bg(theme::HEADER_BG)
             .title("Task list")
+            .title_style(if is_active { Style::default().fg(theme::TITLE_ACTIVE) } else { Style::default().fg(theme::TITLE_INACTIVE) })
             .title_alignment(Alignment::Center);
 
         let inner_block = Block::default()
@@ -441,6 +443,7 @@ impl App {
             .fg(theme::TEXT)
             .bg(theme::HEADER_BG)
             .title("Task stats")
+            .title_style(Style::default().fg(theme::TITLE_INACTIVE))
             .title_alignment(Alignment::Center);
 
         let left_block = Block::default()
@@ -516,6 +519,7 @@ impl App {
             .fg(theme::TEXT)
             .bg(theme::HEADER_BG)
             .title("Total time log")
+            .title_style(Style::default().fg(theme::TITLE_INACTIVE))
             .title_alignment(Alignment::Center);
 
         let left_block = Block::default()
@@ -567,6 +571,7 @@ impl App {
             .fg(theme::TEXT)
             .bg(theme::HEADER_BG)
             .title("Activity log")
+            .title_style(if is_active { Style::default().fg(theme::TITLE_ACTIVE) } else { Style::default().fg(theme::TITLE_INACTIVE) })
             .title_alignment(Alignment::Center);
 
         let inner_info_block = Block::default()
