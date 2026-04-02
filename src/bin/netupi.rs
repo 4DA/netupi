@@ -646,15 +646,18 @@ fn render_editor(editor: &TaskEditor, area: Rect, buf: &mut Buffer) {
         (EditField::WorkMinutes, "Work (min)", format!("{}", editor.work_minutes)),
         (EditField::BreakMinutes, "Break (min)", format!("{}", editor.break_minutes)),
         (EditField::Tags, "Tags", {
+            let is_renaming = editor.editing_tag && editor.renaming_tag.is_some();
             let tags: Vec<String> = editor.tags.iter().enumerate().map(|(i, t)| {
-                if editor.focused_field == EditField::Tags && i == editor.tag_cursor {
+                if is_renaming && i == editor.tag_cursor {
+                    format!("[{}|]", editor.tag_input)
+                } else if editor.focused_field == EditField::Tags && i == editor.tag_cursor {
                     format!("[{}]", t)
                 } else {
                     t.clone()
                 }
             }).collect();
             let s = tags.join(", ");
-            if editor.editing_tag {
+            if editor.editing_tag && !is_renaming {
                 format!("{} + {}_", s, editor.tag_input)
             } else {
                 s
@@ -717,8 +720,12 @@ fn render_editor(editor: &TaskEditor, area: Rect, buf: &mut Buffer) {
         let help_area = Rect::new(inner.x + 1, help_y, inner.width.saturating_sub(2), 1);
         let help = if editor.editing_text {
             "Enter:confirm  Esc:cancel"
+        } else if editor.editing_tag && editor.renaming_tag.is_some() {
+            "Enter:confirm rename  Esc:cancel"
         } else if editor.editing_tag {
             "Enter:add tag  Esc:cancel"
+        } else if editor.focused_field == EditField::Tags {
+            "Enter:add  r:rename  x:delete  h/l:select  Ctrl-S:save  Esc:cancel"
         } else {
             "j/k:nav  h/l:adjust  Enter:edit text  Ctrl-S:save  Esc:cancel"
         };

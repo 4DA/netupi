@@ -84,6 +84,7 @@ pub struct TaskEditor {
     pub cursor_pos: usize,
     pub tag_input: String,
     pub editing_tag: bool,
+    pub renaming_tag: Option<String>, // original tag name being renamed
     pub tag_cursor: usize,
 }
 
@@ -107,6 +108,7 @@ impl TaskEditor {
             cursor_pos: 0,
             tag_input: String::new(),
             editing_tag: false,
+            renaming_tag: None,
             tag_cursor: 0,
         }
     }
@@ -215,16 +217,21 @@ impl TaskEditor {
     fn handle_tag_input(&mut self, key: KeyCode) -> EditAction {
         match key {
             KeyCode::Enter => {
-                let tag = self.tag_input.trim().to_string();
-                if !tag.is_empty() {
-                    self.tags.insert(tag);
+                let new_tag = self.tag_input.trim().to_string();
+                if let Some(ref old_tag) = self.renaming_tag.take() {
+                    self.tags.remove(old_tag);
+                }
+                if !new_tag.is_empty() {
+                    self.tags.insert(new_tag);
                 }
                 self.tag_input.clear();
                 self.editing_tag = false;
+                self.renaming_tag = None;
             }
             KeyCode::Esc => {
                 self.tag_input.clear();
                 self.editing_tag = false;
+                self.renaming_tag = None;
             }
             KeyCode::Backspace => {
                 self.tag_input.pop();
@@ -342,6 +349,17 @@ impl TaskEditor {
                         if self.tag_cursor >= self.tags.len() && self.tag_cursor > 0 {
                             self.tag_cursor -= 1;
                         }
+                    }
+                }
+            }
+
+            // Rename tag with r
+            KeyCode::Char('r') => {
+                if self.focused_field == EditField::Tags && !self.tags.is_empty() {
+                    if let Some(old_tag) = self.tags.iter().nth(self.tag_cursor).cloned() {
+                        self.tag_input = old_tag.clone();
+                        self.renaming_tag = Some(old_tag);
+                        self.editing_tag = true;
                     }
                 }
             }
