@@ -19,7 +19,10 @@ pub const ACCENT_BORDER: Color = tailwind::BLUE.c400;
 pub const COMPLETED: Color = tailwind::GREEN.c500;
 pub const TRACKING_ACTIVE: Color = tailwind::ORANGE.c400;
 pub const TRACKING_PAUSED_BG: Color = tailwind::SLATE.c700;
-pub const PROGRESS_BAR_BG: Color = tailwind::ORANGE.c900;
+pub const PROGRESS_BAR_WORK: Color = tailwind::ORANGE.c900;
+pub const PROGRESS_BAR_BREAK: Color = tailwind::CYAN.c900;
+pub const BORDER_ACTIVE: Color = tailwind::BLUE.c400;
+pub const BORDER_INACTIVE: Color = tailwind::SLATE.c700;
 
 // --- Composite styles ---
 

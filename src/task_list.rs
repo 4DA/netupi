@@ -110,22 +110,6 @@ impl TaskList {
                 self.update(model);
             },
 
-            // n: new task
-            Char('n') => {
-                let task = Task::new_simple("new task".to_string());
-                let uid = task.uid.clone();
-
-                if let Err(what) = db::add_task(model.db.clone(), &task) {
-                    eprintln!("db error: {}", what);
-                }
-
-                model.focus_filter = FocusFilter::Status(task.task_status.clone());
-                model.selected_task = Some(task.uid.clone());
-                model.tasks.insert(uid.clone(), task);
-                model.task_sums.insert(uid.clone(), TimePrefixSum::new());
-                model.update_tags();
-                self.update(model);
-            },
 
             // c: mark completed
             Char('c') => {

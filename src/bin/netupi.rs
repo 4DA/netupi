@@ -139,11 +139,6 @@ impl App {
                 self.filter_list.update(&self.model.focus_filter);
                 self.task_list.update(&self.model);
             }
-            Char('n') => {
-                self.task_list.keymap_task_list(&mut self.model, key);
-                self.filter_list.update(&self.model.focus_filter);
-                self.active_widget = ActiveWidget::TaskWidget;
-            }
             _ => {}
         }
     }
@@ -176,6 +171,25 @@ impl App {
         }
     }
 
+    fn start_new_task(&mut self) {
+        let task = Task::new_simple(String::new());
+        let uid = task.uid.clone();
+
+        if let Err(what) = db::add_task(self.model.db.clone(), &task) {
+            eprintln!("db error: {}", what);
+        }
+
+        self.model.focus_filter = FocusFilter::Status(task.task_status.clone());
+        self.model.selected_task = Some(uid.clone());
+        self.model.task_sums.insert(uid.clone(), TimePrefixSum::new());
+        let editor = TaskEditor::new_task(&task);
+        self.model.tasks.insert(uid.clone(), task);
+        self.model.update_tags();
+        self.task_list.update(&self.model);
+        self.filter_list.update(&self.model.focus_filter);
+        self.mode = AppMode::Editing { editor, original_uid: uid };
+    }
+
     fn start_editing(&mut self) {
         if let Some(ref uid) = self.model.selected_task {
             if let Some(task) = self.model.tasks.get(uid) {
@@ -202,6 +216,17 @@ impl App {
     }
 
     fn cancel_editing(&mut self) {
+        // if cancelling a new task with empty name, delete it
+        if let AppMode::Editing { ref editor, ref original_uid } = self.mode {
+            if editor.name.is_empty() {
+                let _ = db::delete_task(self.model.db.clone(), original_uid);
+                self.model.tasks.remove(original_uid);
+                self.model.task_sums.remove(original_uid);
+                self.model.check_update_selected();
+                self.model.update_tags();
+                self.task_list.update(&self.model);
+            }
+        }
         self.mode = AppMode::Browse;
     }
 
@@ -227,6 +252,10 @@ impl App {
                                 use KeyCode::*;
                                 match key.code {
                                     Char('q') => return Ok(()),
+                                    Char('n') => {
+                                        self.start_new_task();
+                                        self.active_widget = ActiveWidget::TaskWidget;
+                                    }
                                     Char('e') if self.active_widget == ActiveWidget::TaskWidget => {
                                         self.start_editing();
                                     }
@@ -305,9 +334,10 @@ impl App {
 
     fn render_focus(&mut self, area: Rect, buf: &mut Buffer) {
 
+        let is_active = self.active_widget == ActiveWidget::FocusWidget;
         let outer_block = Block::default()
-            .borders(if self.active_widget == ActiveWidget::FocusWidget {Borders::all()} else {Borders::NONE})
-            .padding(if self.active_widget != ActiveWidget::FocusWidget {Padding::symmetric(1, 0)} else {Padding::uniform(0)})
+            .borders(Borders::ALL)
+            .border_style(if is_active { Style::default().fg(theme::BORDER_ACTIVE) } else { Style::default().fg(theme::BORDER_INACTIVE) })
             .fg(theme::TEXT)
             .bg(theme::HEADER_BG)
             .title("Focus")
@@ -325,7 +355,6 @@ impl App {
 
         let items: Vec<ListItem> = self.filter_list.items.iter().map(|x| filter_to_list_item(x)).collect();
 
-        let is_active = self.active_widget == ActiveWidget::FocusWidget;
         let items = List::new(items)
             .block(inner_block)
             .highlight_style(if is_active { theme::highlight_active() } else { theme::highlight_inactive() })
@@ -336,9 +365,10 @@ impl App {
     }
 
     fn render_task_list(&mut self, area: Rect, buf: &mut Buffer) {
+        let is_active = self.active_widget == ActiveWidget::TaskWidget;
         let outer_block = Block::default()
-            .borders(if self.active_widget == ActiveWidget::TaskWidget {Borders::all()} else {Borders::NONE})
-            .padding(if self.active_widget != ActiveWidget::TaskWidget {Padding::symmetric(1, 0)} else {Padding::uniform(0)})
+            .borders(Borders::ALL)
+            .border_style(if is_active { Style::default().fg(theme::BORDER_ACTIVE) } else { Style::default().fg(theme::BORDER_INACTIVE) })
             .fg(theme::TEXT)
             .bg(theme::HEADER_BG)
             .title("Task list")
@@ -395,7 +425,6 @@ impl App {
             })
             .collect();
 
-        let is_active = self.active_widget == ActiveWidget::TaskWidget;
         let items = List::new(items)
             .block(inner_block)
             .highlight_style(if is_active { theme::highlight_active() } else { theme::highlight_inactive() })
@@ -407,7 +436,8 @@ impl App {
 
     fn render_task_stats(&mut self, area: Rect, buf: &mut Buffer) {
         let outer_info_block = Block::default()
-            .borders(Borders::NONE)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::BORDER_INACTIVE))
             .fg(theme::TEXT)
             .bg(theme::HEADER_BG)
             .title("Task stats")
@@ -481,7 +511,8 @@ impl App {
     fn render_total_time_log(&mut self, area: Rect, buf: &mut Buffer) {
 
         let outer_info_block = Block::default()
-            .borders(Borders::NONE)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::BORDER_INACTIVE))
             .fg(theme::TEXT)
             .bg(theme::HEADER_BG)
             .title("Total time log")
@@ -531,8 +562,8 @@ impl App {
         let is_active = self.active_widget == ActiveWidget::ActivityLogWidget;
 
         let outer_info_block = Block::default()
-            .borders(if is_active { Borders::ALL } else { Borders::NONE })
-            .padding(if !is_active { Padding::symmetric(1, 0) } else { Padding::uniform(0) })
+            .borders(Borders::ALL)
+            .border_style(if is_active { Style::default().fg(theme::BORDER_ACTIVE) } else { Style::default().fg(theme::BORDER_INACTIVE) })
             .fg(theme::TEXT)
             .bg(theme::HEADER_BG)
             .title("Activity log")
@@ -720,7 +751,7 @@ fn render_footer(model: &AppModel, active_widget: &ActiveWidget, area: Rect, buf
     let [status_area, help_area] = vertical.areas(area);
 
     // status line with progress bar background
-    let (status, progress) = get_status_info(model);
+    let (status, progress, is_break) = get_status_info(model);
 
     // first render centered text
     Paragraph::new(status.clone())
@@ -730,12 +761,11 @@ fn render_footer(model: &AppModel, active_widget: &ActiveWidget, area: Rect, buf
 
     // then paint background per-cell based on progress
     if progress > 0.0 {
+        let bar_color = if is_break { theme::PROGRESS_BAR_BREAK } else { theme::PROGRESS_BAR_WORK };
         let filled_width = (status_area.width as f64 * progress) as u16;
-        for x in status_area.x..status_area.x + status_area.width {
+        for x in status_area.x..status_area.x + filled_width {
             let cell = buf.get_mut(x, status_area.y);
-            if x < status_area.x + filled_width {
-                cell.set_bg(theme::PROGRESS_BAR_BG);
-            }
+            cell.set_bg(bar_color);
         }
     }
 
@@ -836,8 +866,8 @@ pub fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Returns (status_text, progress_fraction 0.0..1.0)
-fn get_status_info(d: &AppModel) -> (String, f64) {
+/// Returns (status_text, progress_fraction 0.0..1.0, is_break)
+fn get_status_info(d: &AppModel) -> (String, f64, bool) {
     match d.tracking.state {
         TrackingState::Active(ref uid) => {
             let active_task = &d.tasks.get(uid).expect("unknown uid");
@@ -853,7 +883,7 @@ fn get_status_info(d: &AppModel) -> (String, f64) {
 
             (format!("Active: '{}' | Elapsed: {} / {}",
                     active_task.name, time::format_duration(&duration), time::format_duration(&total)),
-             progress)
+             progress, false)
         },
         TrackingState::Break(ref uid) => {
             let rest_task = &d.tasks.get(uid).expect("unknown uid");
@@ -868,7 +898,7 @@ fn get_status_info(d: &AppModel) -> (String, f64) {
 
             (format!("Break: '{}' | Elapsed: {} / {}",
                     rest_task.name, time::format_duration(&duration), time::format_duration(&total)),
-             progress)
+             progress, true)
         },
         TrackingState::Paused(ref uid) => {
             let active_task = &d.tasks.get(uid).expect("unknown uid");
@@ -881,9 +911,9 @@ fn get_status_info(d: &AppModel) -> (String, f64) {
                     active_task.name,
                     time::format_duration(&d.tracking.elapsed),
                     time::format_duration(&total)),
-             progress)
+             progress, false)
         },
 
-        _ => (String::new(), 0.0)
+        _ => (String::new(), 0.0, false)
     }
 }

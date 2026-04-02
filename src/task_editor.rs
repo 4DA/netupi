@@ -111,6 +111,15 @@ impl TaskEditor {
         }
     }
 
+    pub fn new_task(task: &Task) -> TaskEditor {
+        let mut editor = Self::from_task(task);
+        editor.text_buf_backup = task.name.clone();
+        editor.text_buf = String::new();
+        editor.cursor_pos = 0;
+        editor.editing_text = true;
+        editor
+    }
+
     pub fn to_task(&self, original: &Task) -> Task {
         Task {
             uid: self.uid.clone(),
