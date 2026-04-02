@@ -91,6 +91,7 @@ enum ActiveWidget {
 enum AppMode {
     Browse,
     Editing { editor: TaskEditor, original_uid: String },
+    Renaming { uid: String, buf: String, cursor: usize },
 }
 
 struct App {
@@ -171,6 +172,32 @@ impl App {
         }
     }
 
+    fn start_renaming(&mut self) {
+        if let Some(ref uid) = self.model.selected_task {
+            if let Some(task) = self.model.tasks.get(uid) {
+                let name = task.name.clone();
+                let cursor = name.len();
+                self.mode = AppMode::Renaming { uid: uid.clone(), buf: name, cursor };
+            }
+        }
+    }
+
+    fn finish_renaming(&mut self) {
+        if let AppMode::Renaming { ref uid, ref buf, .. } = self.mode {
+            let new_name = buf.trim().to_string();
+            if !new_name.is_empty() {
+                if let Some(task) = self.model.tasks.get_mut(uid) {
+                    task.name = new_name;
+                    if let Err(what) = db::update_task(self.model.db.clone(), task) {
+                        eprintln!("db error: {}", what);
+                    }
+                }
+                self.task_list.update(&self.model);
+            }
+        }
+        self.mode = AppMode::Browse;
+    }
+
     fn start_new_task(&mut self) {
         let task = Task::new_simple(String::new());
         let uid = task.uid.clone();
@@ -248,6 +275,26 @@ impl App {
                                     EditAction::Continue => {}
                                 }
                             }
+                            AppMode::Renaming { ref mut buf, ref mut cursor, .. } => {
+                                use KeyCode::*;
+                                match key.code {
+                                    Enter => self.finish_renaming(),
+                                    Esc => { self.mode = AppMode::Browse; }
+                                    Backspace => {
+                                        if *cursor > 0 {
+                                            buf.remove(*cursor - 1);
+                                            *cursor -= 1;
+                                        }
+                                    }
+                                    Left => { if *cursor > 0 { *cursor -= 1; } }
+                                    Right => { if *cursor < buf.len() { *cursor += 1; } }
+                                    Char(c) => {
+                                        buf.insert(*cursor, c);
+                                        *cursor += 1;
+                                    }
+                                    _ => {}
+                                }
+                            }
                             AppMode::Browse => {
                                 use KeyCode::*;
                                 match key.code {
@@ -255,6 +302,9 @@ impl App {
                                     Char('n') => {
                                         self.start_new_task();
                                         self.active_widget = ActiveWidget::TaskWidget;
+                                    }
+                                    Char('r') if self.active_widget == ActiveWidget::TaskWidget => {
+                                        self.start_renaming();
                                     }
                                     Char('e') if self.active_widget == ActiveWidget::TaskWidget => {
                                         self.start_editing();
@@ -419,12 +469,26 @@ impl App {
                 } else {
                     Span::styled(" ", Style::default().bg(task_color))
                 };
+                let is_renaming = matches!(&self.mode,
+                    AppMode::Renaming { uid, .. } if uid == &t.uid);
+
                 let mut text_style = Style::default().fg(row_fg);
                 if is_active {
                     text_style = text_style.add_modifier(Modifier::BOLD);
                 }
+
+                let display_name = if is_renaming {
+                    if let AppMode::Renaming { ref buf, cursor, .. } = self.mode {
+                        let mut s = buf.clone();
+                        s.insert(cursor, '|');
+                        s
+                    } else { t.name.clone() }
+                } else {
+                    t.name.clone()
+                };
+
                 let text = Span::styled(
-                    format!("{}{}{}", tracking_indicator, priority_indicator, t.name),
+                    format!("{}{}{}", tracking_indicator, priority_indicator, display_name),
                     text_style,
                 );
 
@@ -759,22 +823,31 @@ fn render_title(model: &AppModel, area: Rect, buf: &mut Buffer) {
         .render(area, buf);
 }
 
-fn help_keys(active_widget: &ActiveWidget, model: &AppModel) -> Vec<(&'static str, &'static str)> {
+fn help_keys(active_widget: &ActiveWidget, model: &AppModel, mode: &AppMode) -> Vec<(&'static str, &'static str)> {
+    match mode {
+        AppMode::Renaming { .. } => return vec![
+            ("Enter", "confirm"), ("Esc", "cancel"),
+        ],
+        AppMode::Editing { .. } => return vec![
+            ("Ctrl-S", "save"), ("Esc", "cancel"), ("j/k", "nav"), ("Enter/h/l", "edit"),
+        ],
+        AppMode::Browse => {}
+    }
     match active_widget {
         ActiveWidget::ActivityLogWidget => vec![
             ("j/k", "nav"), ("x", "kill/unkill"), ("Tab", "switch"), ("q", "quit"),
         ],
         _ if model.focus_filter == FocusFilter::Status(TaskStatus::Archived) => vec![
-            ("q", "quit"), ("n", "new"), ("e", "edit"), ("d", "delete"), ("Tab", "switch"),
+            ("q", "quit"), ("n", "new"), ("e", "edit"), ("r", "rename"), ("d", "delete"), ("Tab", "switch"),
         ],
         _ => vec![
             ("q", "quit"), ("space", "start/pause"), ("Esc", "stop"),
-            ("n", "new"), ("e", "edit"), ("c", "complete"), ("a", "archive"), ("Tab", "switch"),
+            ("n", "new"), ("e", "edit"), ("r", "rename"), ("c", "complete"), ("a", "archive"), ("Tab", "switch"),
         ],
     }
 }
 
-fn render_footer(model: &AppModel, active_widget: &ActiveWidget, area: Rect, buf: &mut Buffer) {
+fn render_footer(model: &AppModel, active_widget: &ActiveWidget, mode: &AppMode, area: Rect, buf: &mut Buffer) {
     let vertical = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
@@ -801,7 +874,7 @@ fn render_footer(model: &AppModel, active_widget: &ActiveWidget, area: Rect, buf
     }
 
     // help line with bold keys
-    let keys = help_keys(active_widget, model);
+    let keys = help_keys(active_widget, model, mode);
     let mut spans: Vec<Span> = Vec::new();
     for (i, (key, desc)) in keys.iter().enumerate() {
         if i > 0 {
@@ -829,7 +902,7 @@ impl Widget for &mut App {
 
         render_title(&self.model, header_area, buf);
         self.render_main_widget(rest_area, buf);
-        render_footer(&self.model, &self.active_widget, footer_area, buf);
+        render_footer(&self.model, &self.active_widget, &self.mode, footer_area, buf);
 
         if let AppMode::Editing { ref editor, .. } = self.mode {
             render_editor(editor, area, buf);
