@@ -379,11 +379,17 @@ impl App {
                 };
 
                 let line = format!("{}{}{}", tracking_indicator, priority_indicator, t.name);
-                let is_tracking = matches!(&self.model.tracking.state,
+                let is_active = matches!(&self.model.tracking.state,
                     TrackingState::Active(uid) if uid == &t.uid);
-                let mut item = ListItem::new(line).bg(bg_color);
-                if is_tracking {
-                    item = item.fg(theme::TRACKING_ACTIVE);
+                let is_paused = matches!(&self.model.tracking.state,
+                    TrackingState::Paused(uid) if uid == &t.uid);
+                let mut item = ListItem::new(line);
+                if is_active {
+                    item = item.fg(theme::TRACKING_ACTIVE).bg(bg_color);
+                } else if is_paused {
+                    item = item.bg(theme::TRACKING_PAUSED_BG);
+                } else {
+                    item = item.bg(bg_color);
                 }
                 item
             })
@@ -713,12 +719,25 @@ fn render_footer(model: &AppModel, active_widget: &ActiveWidget, area: Rect, buf
     ]);
     let [status_area, help_area] = vertical.areas(area);
 
-    // status line
-    let status = get_status_string(model);
-    Paragraph::new(status)
+    // status line with progress bar background
+    let (status, progress) = get_status_info(model);
+
+    // first render centered text
+    Paragraph::new(status.clone())
         .centered()
         .fg(theme::TEXT)
         .render(status_area, buf);
+
+    // then paint background per-cell based on progress
+    if progress > 0.0 {
+        let filled_width = (status_area.width as f64 * progress) as u16;
+        for x in status_area.x..status_area.x + status_area.width {
+            let cell = buf.get_mut(x, status_area.y);
+            if x < status_area.x + filled_width {
+                cell.set_bg(theme::PROGRESS_BAR_BG);
+            }
+        }
+    }
 
     // help line with bold keys
     let keys = help_keys(active_widget, model);
@@ -817,7 +836,8 @@ pub fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_status_string(d: &AppModel) -> String {
+/// Returns (status_text, progress_fraction 0.0..1.0)
+fn get_status_info(d: &AppModel) -> (String, f64) {
     match d.tracking.state {
         TrackingState::Active(ref uid) => {
             let active_task = &d.tasks.get(uid).expect("unknown uid");
@@ -827,9 +847,13 @@ fn get_status_string(d: &AppModel) -> String {
                 .unwrap_or(chrono::Duration::zero());
 
             let total = get_work_interval(d, uid);
+            let progress = if total.num_milliseconds() > 0 {
+                (duration.num_milliseconds() as f64 / total.num_milliseconds() as f64).min(1.0)
+            } else { 0.0 };
 
-            format!("Active: '{}' | Elapsed: {} / {}",
-                    active_task.name, time::format_duration(&duration), time::format_duration(&total))
+            (format!("Active: '{}' | Elapsed: {} / {}",
+                    active_task.name, time::format_duration(&duration), time::format_duration(&total)),
+             progress)
         },
         TrackingState::Break(ref uid) => {
             let rest_task = &d.tasks.get(uid).expect("unknown uid");
@@ -838,20 +862,28 @@ fn get_status_string(d: &AppModel) -> String {
                 Utc::now().signed_duration_since(d.tracking.timestamp.as_ref().clone());
 
             let total = get_rest_interval(d, uid);
+            let progress = if total.num_milliseconds() > 0 {
+                (duration.num_milliseconds() as f64 / total.num_milliseconds() as f64).min(1.0)
+            } else { 0.0 };
 
-            format!("Break: '{}' | Elapsed: {} / {}",
-                    rest_task.name, time::format_duration(&duration), time::format_duration(&total))
+            (format!("Break: '{}' | Elapsed: {} / {}",
+                    rest_task.name, time::format_duration(&duration), time::format_duration(&total)),
+             progress)
         },
         TrackingState::Paused(ref uid) => {
             let active_task = &d.tasks.get(uid).expect("unknown uid");
+            let total = get_work_interval(d, uid);
+            let progress = if total.num_milliseconds() > 0 {
+                (d.tracking.elapsed.num_milliseconds() as f64 / total.num_milliseconds() as f64).min(1.0)
+            } else { 0.0 };
 
-            format!("Paused: '{}' | Elapsed: {} / {}",
+            (format!("Paused: '{}' | Elapsed: {} / {}",
                     active_task.name,
                     time::format_duration(&d.tracking.elapsed),
-                    time::format_duration(&get_work_interval(d, uid)))
+                    time::format_duration(&total)),
+             progress)
         },
 
-        _ => String::new()
+        _ => (String::new(), 0.0)
     }
-
 }

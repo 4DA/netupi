@@ -45,13 +45,7 @@ impl TaskList {
         if self.items.is_empty() {return None;}
 
         let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.items.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
+            Some(i) => (i + 1).min(self.items.len() - 1),
             None => self.last_selected.unwrap_or(0),
         };
 
@@ -64,13 +58,7 @@ impl TaskList {
         if self.items.is_empty() {return None;}
 
         let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.items.len() - 1
-                } else {
-                    i - 1
-                }
-            }
+            Some(i) => i.saturating_sub(1),
             None => self.last_selected.unwrap_or(0),
         };
 
@@ -109,6 +97,7 @@ impl TaskList {
 
                         TrackingState::Break(_uid) => start_tracking(model, selected),
                     }
+                    self.update(model);
                 }
             },
 
@@ -118,6 +107,7 @@ impl TaskList {
                     TrackingState::Active(_) => stop_tracking(model, TrackingState::Inactive),
                     _ => model.tracking.state = TrackingState::Inactive,
                 }
+                self.update(model);
             },
 
             // n: new task
