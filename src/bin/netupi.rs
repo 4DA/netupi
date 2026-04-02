@@ -146,6 +146,10 @@ impl App {
                 self.filter_list.update(&self.model.focus_filter);
                 self.task_list.update(&self.model);
             }
+            Char('n') => {
+                self.task_list.keymap_task_list(&mut self.model, key);
+                self.filter_list.update(&self.model.focus_filter);
+            }
             _ => {}
         }
     }
@@ -327,15 +331,18 @@ impl App {
 
         let items: Vec<ListItem> = self.filter_list.items.iter().map(|x| filter_to_list_item(x)).collect();
 
+        let is_active = self.active_widget == ActiveWidget::FocusWidget;
         let items = List::new(items)
             .block(inner_block)
-            .highlight_style(
+            .highlight_style(if is_active {
                 Style::default()
                     .add_modifier(Modifier::BOLD)
                     .add_modifier(Modifier::REVERSED)
-                    .fg(SELECTED_STYLE_FG),
-            )
-            .highlight_symbol(">")
+                    .fg(SELECTED_STYLE_FG)
+            } else {
+                Style::default().fg(TEXT_COLOR)
+            })
+            .highlight_symbol(if is_active { ">" } else { " " })
             .highlight_spacing(HighlightSpacing::Always);
 
         StatefulWidget::render(items, inner_area, buf, &mut self.filter_list.state);
@@ -389,15 +396,18 @@ impl App {
             })
             .collect();
 
+        let is_active = self.active_widget == ActiveWidget::TaskWidget;
         let items = List::new(items)
             .block(inner_block)
-            .highlight_style(
+            .highlight_style(if is_active {
                 Style::default()
                     .add_modifier(Modifier::BOLD)
                     .add_modifier(Modifier::REVERSED)
-                    .fg(SELECTED_STYLE_FG),
-            )
-            .highlight_symbol(">")
+                    .fg(SELECTED_STYLE_FG)
+            } else {
+                Style::default().fg(TEXT_COLOR)
+            })
+            .highlight_symbol(if is_active { ">" } else { " " })
             .highlight_spacing(HighlightSpacing::Always);
 
         StatefulWidget::render(items, inner_area, buf, &mut self.task_list.state);
