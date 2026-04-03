@@ -566,14 +566,34 @@ impl App {
 
     fn render_task_stats(&mut self, area: Rect, buf: &mut Buffer) {
         let selected_uid = self.model.selected_task.clone().unwrap();
+        let task = self.model.tasks.get(&selected_uid).unwrap();
         let task_sum = self.model.task_sums.get(&selected_uid).unwrap();
 
-        // split vertically: aggregate stats on top, daily retrospective below
-        let vertical = Layout::vertical([
-            Constraint::Length(7), // border + 5 rows + border
+        let has_desc = !task.description.trim().is_empty();
+        let desc_lines = if has_desc {
+            task.description.lines().count().min(3) as u16 + 2 // +2 for borders
+        } else {
+            0
+        };
+
+        let chunks = Layout::vertical([
+            Constraint::Length(if has_desc { desc_lines } else { 0 }),
+            Constraint::Length(7),
             Constraint::Min(5),
-        ]);
-        let [agg_area, retro_area] = vertical.areas(area);
+        ]).split(area);
+        let (desc_area, agg_area, retro_area) = (chunks[0], chunks[1], chunks[2]);
+
+        if has_desc {
+            let desc_block = pane_block("Description", false);
+            let desc_inner = desc_block.inner(desc_area);
+            desc_block.render(desc_area, buf);
+
+            Paragraph::new(task.description.as_str())
+                .block(Block::default().bg(theme::ROW_BG).padding(Padding::horizontal(1)))
+                .fg(theme::TEXT_SECONDARY)
+                .wrap(Wrap { trim: false })
+                .render(desc_inner, buf);
+        }
 
         // --- aggregate stats ---
         let agg_block = pane_block("Task stats", false);
