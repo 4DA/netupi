@@ -104,6 +104,7 @@ struct App {
     log_cursor: usize,
     tag_cursor: usize,
     current_date: chrono::NaiveDate,
+    last_tick: DateTime<Utc>,
 }
 
 impl App {
@@ -127,7 +128,8 @@ impl App {
         let filter_list = StatusList::new(&model.focus_filter);
 
         let current_date = Local::now().date().naive_local();
-        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget, mode: AppMode::Browse, log_cursor: 0, tag_cursor: 0, current_date};
+        let last_tick = Utc::now();
+        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget, mode: AppMode::Browse, log_cursor: 0, tag_cursor: 0, current_date, last_tick};
     }
 
     fn keymap_filter_list(&mut self, key: event::KeyCode) {
@@ -295,6 +297,22 @@ impl App {
     fn run(&mut self, mut terminal: Terminal<impl Backend>) -> io::Result<()> {
 
         loop {
+            let now = Utc::now();
+
+            // detect suspend: if >2 min since last tick, auto-pause active task
+            let gap = now.signed_duration_since(self.last_tick);
+            if gap > chrono::Duration::minutes(2) {
+                let active_uid = match self.model.tracking.state {
+                    TrackingState::Active(ref uid) => Some(uid.clone()),
+                    _ => None,
+                };
+                if let Some(uid) = active_uid {
+                    pause_tracking(&mut self.model, uid);
+                    self.task_list.update(&self.model);
+                }
+            }
+            self.last_tick = now;
+
             handle_timer_event(&mut self.model);
 
             // refresh stats when date rolls over
