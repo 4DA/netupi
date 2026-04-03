@@ -183,22 +183,14 @@ impl AppModel {
     }
 
     pub fn toggle_kill_record(&mut self, record_key: &DateTime<Utc>) {
-        if self.records_killed.contains(record_key) {
-            // unkill: re-insert into DB
-            if let Some(record) = self.records.get(record_key) {
-                if let Err(what) = crate::db::add_time_record(self.db.clone(), record) {
-                    eprintln!("db error: {}", what);
-                }
-            }
-            self.records_killed.remove(record_key);
-        } else {
-            // kill: remove from DB
-            if let Some(record) = self.records.get(record_key) {
-                if let Err(what) = crate::db::remove_time_record(self.db.clone(), record) {
-                    eprintln!("db error: {}", what);
-                }
-            }
+        let killing = !self.records_killed.contains(record_key);
+        if let Err(what) = crate::db::set_record_killed(self.db.clone(), record_key, killing) {
+            eprintln!("db error: {}", what);
+        }
+        if killing {
             self.records_killed.insert(record_key.clone());
+        } else {
+            self.records_killed.remove(record_key);
         }
         self.rebuild_task_sums();
     }

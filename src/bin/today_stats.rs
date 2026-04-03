@@ -16,14 +16,14 @@ pub fn main() -> anyhow::Result<()>{
     let db = Rc::new(conn);
 
     let (tasks, _tags) = db::get_tasks(db.clone())?;
-    let records = db::get_time_records(db.clone(),
+    let (records, records_killed) = db::get_time_records(db.clone(),
         &DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
         &DateTime::from(SystemTime::now()))?;
 
     let mut task_sums = TaskSums::new();
 
     for (uid, _) in &tasks {
-        let sum = build_time_prefix_sum(&tasks, &records, uid.clone(), &TimeRecordSet::new());
+        let sum = build_time_prefix_sum(&tasks, &records, uid.clone(), &records_killed);
         task_sums.insert(uid.clone(), sum);
     }
 

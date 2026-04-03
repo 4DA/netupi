@@ -234,22 +234,45 @@ pub fn remove_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::
     Ok(())
 }
 
-pub fn get_time_records(conn: Rc<Connection>, from: &DateTime<Utc>, to: &DateTime<Utc>)
-                        -> anyhow::Result<TimeRecordMap>
+pub fn set_record_killed(conn: Rc<Connection>, from: &DateTime<Utc>, killed: bool) -> anyhow::Result<()>
 {
-    let mut stmt = conn.prepare("SELECT * FROM time_records WHERE ts_from >= ?1 AND ts_to < ?2")?;
+    conn.execute(
+        "UPDATE time_records SET killed = ?1 WHERE ts_from = ?2",
+        params![killed as i32, TimeWrapper(*from)],
+    )?;
+
+    Ok(())
+}
+
+pub fn get_time_records(conn: Rc<Connection>, from: &DateTime<Utc>, to: &DateTime<Utc>)
+                        -> anyhow::Result<(TimeRecordMap, TimeRecordSet)>
+{
+    let mut stmt = conn.prepare("SELECT ts_from, ts_to, uid, killed FROM time_records WHERE ts_from >= ?1 AND ts_to < ?2")?;
+
+    let mut records = TimeRecordMap::new();
+    let mut killed = TimeRecordSet::new();
 
     let rows = stmt.query_map(params![TimeWrapper(*from), TimeWrapper(*to)],
         |row| {
             let ts_from: TimeWrapper = row.get(0)?;
             let ts_to: TimeWrapper = row.get(1)?;
+            let is_killed: i32 = row.get(3)?;
 
-            Ok(TimeRecord {
+            Ok((TimeRecord {
                 from: Rc::new(ts_from.0),
                 to: Rc::new(ts_to.0),
                 uid: row.get(2)?
-            })
+            }, is_killed != 0))
         })?;
 
-    Ok(TimeRecordMap::from_iter(rows.map(|x| (*(x.as_ref().unwrap().from).clone(), x.unwrap()))))
+    for row in rows {
+        let (record, is_killed) = row?;
+        let key = *record.from;
+        if is_killed {
+            killed.insert(key);
+        }
+        records.insert(key, record);
+    }
+
+    Ok((records, killed))
 }
