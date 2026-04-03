@@ -30,24 +30,36 @@ pub fn main() -> anyhow::Result<()>{
     let aggregate = time::get_durations(&task_sums);
     let today_time = time::format_duration(&aggregate.day);
 
-    // find last tracked task today
+    // find active or last tracked task today
     let now_local: DateTime<Local> = Local::now();
+    let now_utc = Utc::now();
     let day_start: DateTime<Utc> = DateTime::from(now_local.date().and_hms(0, 0, 0));
 
-    let last_task = records.iter().rev()
+    // active record: ts_from == ts_to (written on start, updated on stop)
+    let active = records.iter().rev()
         .filter(|(ts, _)| **ts >= day_start)
-        .filter(|(ts, _)| !records_killed.contains(ts))
-        .find_map(|(_, rec)| tasks.get(&rec.uid));
+        .find(|(_, rec)| *rec.from == *rec.to);
 
-    if let Some(task) = last_task {
+    let (task, elapsed) = if let Some((_, rec)) = active {
+        let elapsed = now_utc.signed_duration_since(*rec.from);
+        (tasks.get(&rec.uid), Some(elapsed))
+    } else {
+        let last = records.iter().rev()
+            .filter(|(ts, _)| **ts >= day_start)
+            .filter(|(ts, _)| !records_killed.contains(ts))
+            .find_map(|(_, rec)| tasks.get(&rec.uid));
+        (last, None)
+    };
+
+    if let Some((task, elapsed)) = task.zip(elapsed) {
         let name = if task.name.len() > 10 {
             format!("{:.10}", task.name)
         } else {
             task.name.clone()
         };
-        println!("{} {}", name, today_time.trim());
+        println!("T:\"{}\" {} | today:{}", name, time::format_duration(&elapsed), today_time.trim());
     } else {
-        println!("{}", today_time.trim());
+        println!("today:{}", today_time.trim());
     }
     Ok(())
 }

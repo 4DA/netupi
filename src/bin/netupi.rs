@@ -331,7 +331,10 @@ impl App {
                             AppMode::Browse => {
                                 use KeyCode::*;
                                 match key.code {
-                                    Char('q') => return Ok(()),
+                                    Char('q') => {
+                                        stop_tracking(&mut self.model, TrackingState::Inactive);
+                                        return Ok(());
+                                    }
                                     Char('n') => {
                                         self.start_new_task();
                                         self.active_widget = ActiveWidget::TaskWidget;

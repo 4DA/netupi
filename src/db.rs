@@ -216,6 +216,16 @@ pub fn add_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::Res
     Ok(())
 }
 
+pub fn update_time_record(conn: Rc<Connection>, record: &TimeRecord) -> anyhow::Result<()>
+{
+    conn.execute(
+        "UPDATE time_records SET ts_to = ?1 WHERE ts_from = ?2",
+        params![TimeWrapper(*record.to), TimeWrapper(*record.from)],
+    )?;
+
+    Ok(())
+}
+
 pub fn delete_time_records_for_task(conn: Rc<Connection>, uid: &String) -> anyhow::Result<()> {
     conn.execute(
         "DELETE FROM time_records WHERE uid = ?1",

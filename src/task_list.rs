@@ -248,7 +248,8 @@ pub fn resume_tracking(data: &mut AppModel, uid: String) {
 pub fn start_tracking(data: &mut AppModel, uid: String) {
     use TaskStatus::*;
 
-    data.tracking.timestamp = Rc::new(Utc::now());
+    let now = Rc::new(Utc::now());
+    data.tracking.timestamp = now.clone();
     data.tracking.elapsed = Rc::new(chrono::Duration::zero());
     data.tracking.timer = request_timer(get_work_interval(data, &uid).to_std().unwrap());
 
@@ -261,6 +262,12 @@ pub fn start_tracking(data: &mut AppModel, uid: String) {
         if let Err(what) = db::update_task(data.db.clone(), &task) {
             eprintln!("db error: {}", what);
         }
+    }
+
+    // write record to DB immediately so external tools can see active tracking
+    let record = TimeRecord { from: now.clone(), to: now, uid: uid.clone() };
+    if let Err(what) = db::add_time_record(data.db.clone(), &record) {
+        eprintln!("db error: {}", what);
     }
 
     data.focus_filter =
@@ -294,7 +301,8 @@ pub fn stop_tracking(data: &mut AppModel, new_state: TrackingState) {
     let record = TimeRecord{from: data.tracking.timestamp.clone(), to: now.clone(),
                             uid: task.uid.clone()};
 
-    if let Err(what) = db::add_time_record(data.db.clone(), &record) {
+    // update the record that was created on start
+    if let Err(what) = db::update_time_record(data.db.clone(), &record) {
         eprintln!("db error: {}", what);
     }
 
