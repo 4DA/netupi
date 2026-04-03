@@ -85,6 +85,7 @@ fn filter_to_list_item(filter: &FocusFilter) -> ListItem {
 enum ActiveWidget {
     TaskWidget,
     FocusWidget,
+    TagWidget,
     ActivityLogWidget,
 }
 
@@ -101,6 +102,7 @@ struct App {
     active_widget: ActiveWidget,
     mode: AppMode,
     log_cursor: usize,
+    tag_cursor: usize,
 }
 
 impl App {
@@ -123,7 +125,7 @@ impl App {
         let task_list = TaskList{state, items, last_selected};
         let filter_list = StatusList::new(&model.focus_filter);
 
-        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget, mode: AppMode::Browse, log_cursor: 0};
+        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget, mode: AppMode::Browse, log_cursor: 0, tag_cursor: 0};
     }
 
     fn keymap_filter_list(&mut self, key: event::KeyCode) {
@@ -146,6 +148,37 @@ impl App {
 
     fn get_log_records(&self) -> Vec<DateTime<Utc>> {
         self.model.records.keys().rev().cloned().collect()
+    }
+
+    fn get_tag_list(&self) -> Vec<String> {
+        self.model.tags.iter().cloned().collect()
+    }
+
+    fn keymap_tag_list(&mut self, key: event::KeyCode) {
+        use KeyCode::*;
+        let tags = self.get_tag_list();
+        // +1 for the "All" entry at the top
+        let count = tags.len() + 1;
+
+        match key {
+            Char('j') | Down => {
+                self.tag_cursor = (self.tag_cursor + 1).min(count - 1);
+            }
+            Char('k') | Up => {
+                if self.tag_cursor > 0 {
+                    self.tag_cursor -= 1;
+                }
+            }
+            Enter => {
+                if self.tag_cursor == 0 {
+                    self.model.tag_filter = None;
+                } else if let Some(tag) = tags.get(self.tag_cursor - 1) {
+                    self.model.tag_filter = Some(tag.clone());
+                }
+                self.task_list.update(&self.model);
+            }
+            _ => {}
+        }
     }
 
     fn keymap_activity_log(&mut self, key: event::KeyCode) {
@@ -311,7 +344,8 @@ impl App {
                                     }
                                     Tab => {
                                         self.active_widget = match self.active_widget {
-                                            ActiveWidget::FocusWidget => ActiveWidget::TaskWidget,
+                                            ActiveWidget::FocusWidget => ActiveWidget::TagWidget,
+                                            ActiveWidget::TagWidget => ActiveWidget::TaskWidget,
                                             ActiveWidget::TaskWidget => ActiveWidget::ActivityLogWidget,
                                             ActiveWidget::ActivityLogWidget => ActiveWidget::FocusWidget,
                                         };
@@ -319,7 +353,8 @@ impl App {
                                     BackTab => {
                                         self.active_widget = match self.active_widget {
                                             ActiveWidget::FocusWidget => ActiveWidget::ActivityLogWidget,
-                                            ActiveWidget::TaskWidget => ActiveWidget::FocusWidget,
+                                            ActiveWidget::TagWidget => ActiveWidget::FocusWidget,
+                                            ActiveWidget::TaskWidget => ActiveWidget::TagWidget,
                                             ActiveWidget::ActivityLogWidget => ActiveWidget::TaskWidget,
                                         };
                                     }
@@ -329,6 +364,7 @@ impl App {
                                             self.filter_list.update(&self.model.focus_filter);
                                         },
                                         ActiveWidget::FocusWidget => self.keymap_filter_list(key.code),
+                                        ActiveWidget::TagWidget => self.keymap_tag_list(key.code),
                                         ActiveWidget::ActivityLogWidget => self.keymap_activity_log(key.code),
                                     }
                                 }
@@ -366,11 +402,18 @@ impl App {
             Constraint::Min(20),
         ]);
 
+        let left_vertical = Layout::vertical([
+            Constraint::Length(7), // 5 focus items + border
+            Constraint::Min(5),
+        ]);
+
         let [focus_area, center_area, right_area] = horizontal.areas(area);
+        let [filter_area, tag_area] = left_vertical.areas(focus_area);
         let [task_list_area, task_stats_area] = vertical.areas(center_area);
         let [total_time_log_area, activity_log_area] = right_vertical.areas(right_area);
 
-        self.render_focus(focus_area, buf);
+        self.render_focus(filter_area, buf);
+        self.render_tags(tag_area, buf);
 
         self.render_task_list(task_list_area, buf);
 
@@ -404,6 +447,40 @@ impl App {
             .highlight_spacing(HighlightSpacing::Always);
 
         StatefulWidget::render(items, inner_area, buf, &mut self.filter_list.state);
+    }
+
+    fn render_tags(&mut self, area: Rect, buf: &mut Buffer) {
+        let is_active = self.active_widget == ActiveWidget::TagWidget;
+        let outer_block = pane_block("Tags", is_active);
+
+        let inner_block = Block::default()
+            .borders(Borders::NONE)
+            .fg(theme::TEXT)
+            .bg(theme::ROW_BG);
+
+        let inner_area = outer_block.inner(area);
+        outer_block.render(area, buf);
+
+        let tags = self.get_tag_list();
+        let active_style = Style::default().fg(theme::TRACKING_ACTIVE).add_modifier(Modifier::BOLD);
+        let mut items: Vec<ListItem> = Vec::with_capacity(tags.len() + 1);
+        let all_style = if self.model.tag_filter.is_none() { active_style } else { Style::default() };
+        items.push(ListItem::new(Span::styled("All", all_style)).bg(theme::ROW_BG));
+        for tag in &tags {
+            let style = if self.model.tag_filter.as_ref() == Some(tag) { active_style } else { Style::default() };
+            items.push(ListItem::new(Span::styled(tag.as_str(), style)).bg(theme::ROW_BG));
+        }
+
+        let mut state = ListState::default();
+        state.select(Some(self.tag_cursor));
+
+        let list = List::new(items)
+            .block(inner_block)
+            .highlight_style(if is_active { theme::highlight_active() } else { theme::highlight_inactive() })
+            .highlight_symbol(if is_active { ">" } else { " " })
+            .highlight_spacing(HighlightSpacing::Always);
+
+        StatefulWidget::render(list, inner_area, buf, &mut state);
     }
 
     fn render_task_list(&mut self, area: Rect, buf: &mut Buffer) {
