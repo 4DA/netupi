@@ -49,6 +49,27 @@ impl FromSql for TimeWrapper {
     }
 }
 
+fn set_version(conn: &Connection, version: i64) -> anyhow::Result<()> {
+    conn.execute("DELETE FROM schema_version", [])?;
+    conn.execute("INSERT INTO schema_version (version) VALUES (?1)", params![version])?;
+    Ok(())
+}
+
+fn add_column(conn: &Connection, table: &str, column: &str, typ: &str) {
+    let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, typ);
+    let _ = conn.execute_batch(&sql); // ignore "duplicate column" errors
+}
+
+fn migrate(conn: &Connection, current: i64) -> anyhow::Result<()> {
+    if current < 1 {
+        add_column(conn, "time_records", "killed", "INTEGER NOT NULL DEFAULT 0");
+        add_column(conn, "tasks", "created_at", "INTEGER");
+        add_column(conn, "tasks", "updated_at", "INTEGER");
+        set_version(conn, 1)?;
+    }
+    Ok(())
+}
+
 pub fn init(mut path_buf: PathBuf) -> anyhow::Result<Connection>
 {
     let dir = path_buf.to_str().unwrap();
@@ -83,6 +104,16 @@ pub fn init(mut path_buf: PathBuf) -> anyhow::Result<Connection>
          )",
         [],
     )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)",
+        [],
+    )?;
+
+    let version: i64 = conn
+        .query_row("SELECT COALESCE(MAX(version), 0) FROM schema_version", [], |row| row.get(0))?;
+
+    migrate(&conn, version)?;
 
     Ok(conn)
 }
