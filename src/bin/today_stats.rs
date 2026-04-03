@@ -28,6 +28,26 @@ pub fn main() -> anyhow::Result<()>{
     }
 
     let aggregate = time::get_durations(&task_sums);
-    println!("{:>12}", time::format_duration(&aggregate.day));
+    let today_time = time::format_duration(&aggregate.day);
+
+    // find last tracked task today
+    let now_local: DateTime<Local> = Local::now();
+    let day_start: DateTime<Utc> = DateTime::from(now_local.date().and_hms(0, 0, 0));
+
+    let last_task = records.iter().rev()
+        .filter(|(ts, _)| **ts >= day_start)
+        .filter(|(ts, _)| !records_killed.contains(ts))
+        .find_map(|(_, rec)| tasks.get(&rec.uid));
+
+    if let Some(task) = last_task {
+        let name = if task.name.len() > 10 {
+            format!("{:.10}", task.name)
+        } else {
+            task.name.clone()
+        };
+        println!("{} {}", name, today_time.trim());
+    } else {
+        println!("{}", today_time.trim());
+    }
     Ok(())
 }
