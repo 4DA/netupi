@@ -103,6 +103,7 @@ struct App {
     mode: AppMode,
     log_cursor: usize,
     tag_cursor: usize,
+    current_date: chrono::NaiveDate,
 }
 
 impl App {
@@ -125,7 +126,8 @@ impl App {
         let task_list = TaskList{state, items, last_selected};
         let filter_list = StatusList::new(&model.focus_filter);
 
-        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget, mode: AppMode::Browse, log_cursor: 0, tag_cursor: 0};
+        let current_date = Local::now().date().naive_local();
+        return App{model, task_list, filter_list, active_widget: ActiveWidget::TaskWidget, mode: AppMode::Browse, log_cursor: 0, tag_cursor: 0, current_date};
     }
 
     fn keymap_filter_list(&mut self, key: event::KeyCode) {
@@ -294,6 +296,13 @@ impl App {
 
         loop {
             handle_timer_event(&mut self.model);
+
+            // refresh stats when date rolls over
+            let today = Local::now().date().naive_local();
+            if today != self.current_date {
+                self.current_date = today;
+                self.model.rebuild_task_sums();
+            }
 
             self.draw(&mut terminal)?;
 
