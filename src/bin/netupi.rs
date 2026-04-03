@@ -894,11 +894,11 @@ fn help_keys(active_widget: &ActiveWidget, model: &AppModel, mode: &AppMode) -> 
             ("j/k", "nav"), ("x", "kill/unkill"), ("Tab", "switch"), ("q", "quit"),
         ],
         _ if model.focus_filter == FocusFilter::Status(TaskStatus::Archived) => vec![
-            ("q", "quit"), ("n", "new"), ("e", "edit"), ("r", "rename"), ("d", "delete"), ("Tab", "switch"),
+            ("n", "new"), ("e", "edit"), ("r", "rename"), ("d", "delete"), ("Tab", "switch"), ("q", "quit"),
         ],
         _ => vec![
-            ("q", "quit"), ("space", "start/pause"), ("Esc", "stop"),
-            ("n", "new"), ("e", "edit"), ("r", "rename"), ("c", "complete"), ("a", "archive"), ("Tab", "switch"),
+            ("space", "start/pause"), ("Esc", "stop"),
+            ("n", "new"), ("e", "edit"), ("r", "rename"), ("c", "complete"), ("a", "archive"), ("Tab", "switch"), ("q", "quit"),
         ],
     }
 }
@@ -934,10 +934,10 @@ fn render_footer(model: &AppModel, active_widget: &ActiveWidget, mode: &AppMode,
     let mut spans: Vec<Span> = Vec::new();
     for (i, (key, desc)) in keys.iter().enumerate() {
         if i > 0 {
-            spans.push(Span::raw("  "));
+            spans.push(Span::raw(" "));
         }
-        spans.push(Span::styled(format!(" {} ", key), theme::help_key()));
-        spans.push(Span::styled(format!(" {} ", desc), theme::help_desc()));
+        spans.push(Span::styled(format!(" {}", key), theme::help_key()));
+        spans.push(Span::styled(format!(" {} │", desc), theme::help_desc()));
     }
 
     Paragraph::new(Line::from(spans))
