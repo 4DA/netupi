@@ -264,7 +264,8 @@ pub fn start_tracking(data: &mut AppModel, uid: String) {
         }
     }
 
-    // write record to DB immediately so external tools can see active tracking
+    // write record with ts_from == ts_to so external tools can detect active tracking;
+    // ts_to is updated on stop, stale records are cleaned up on next startup
     let record = TimeRecord { from: now.clone(), to: now, uid: uid.clone() };
     if let Err(what) = db::add_time_record(data.db.clone(), &record) {
         eprintln!("db error: {}", what);

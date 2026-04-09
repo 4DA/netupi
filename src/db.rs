@@ -115,6 +115,17 @@ pub fn init(mut path_buf: PathBuf) -> anyhow::Result<Connection>
 
     migrate(&conn, version)?;
 
+    // clean up stale tracking record from unclean shutdown
+    let last: Option<(i64, i64)> = conn.query_row(
+        "SELECT ts_from, ts_to FROM time_records ORDER BY ts_from DESC LIMIT 1",
+        [], |row| Ok((row.get(0)?, row.get(1)?))
+    ).ok();
+    if let Some((from, to)) = last {
+        if from == to {
+            conn.execute("DELETE FROM time_records WHERE ts_from = ?1", params![from])?;
+        }
+    }
+
     Ok(conn)
 }
 
