@@ -19,6 +19,8 @@ pub const ACCENT_BORDER: Color = tailwind::BLUE.c400;
 #[allow(unused)]
 pub const COMPLETED: Color = tailwind::GREEN.c500;
 pub const TRACKING_ACTIVE: Color = tailwind::ORANGE.c400;
+pub const TRACKING_ACTIVE_FG_SELECTED: Color = tailwind::ORANGE.c50;
+pub const TRACKING_ACTIVE_BG: Color = tailwind::ORANGE.c900;
 pub const TRACKING_PAUSED_BG: Color = tailwind::SLATE.c700;
 pub const PROGRESS_BAR_WORK: Color = tailwind::ORANGE.c900;
 pub const PROGRESS_BAR_BREAK: Color = tailwind::CYAN.c900;
@@ -31,7 +33,13 @@ pub const TITLE_INACTIVE: Color = tailwind::SLATE.c300;
 
 pub fn highlight_active() -> Style {
     Style::default()
-        .fg(ACCENT)
+        .fg(TRACKING_ACTIVE)
+        .add_modifier(Modifier::BOLD)
+}
+
+pub fn highlight_active_tracking() -> Style {
+    Style::default()
+        .fg(TRACKING_ACTIVE_FG_SELECTED)
         .add_modifier(Modifier::BOLD)
 }
 

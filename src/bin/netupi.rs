@@ -527,6 +527,11 @@ impl App {
 
         let tasks = self.model.get_tasks_filtered();
 
+        let selected_is_tracking = self.task_list.state.selected()
+            .and_then(|i| tasks.get(i))
+            .map(|t| matches!(&self.model.tracking.state, TrackingState::Active(uid) if uid == &t.uid))
+            .unwrap_or(false);
+
         let items: Vec<ListItem> = tasks
             .iter()
             .map(|t| {
@@ -550,7 +555,13 @@ impl App {
                 };
 
                 let row_fg = if is_active { theme::TRACKING_ACTIVE } else { theme::TEXT };
-                let row_bg = if is_paused { theme::TRACKING_PAUSED_BG } else { bg_color };
+                let row_bg = if is_active {
+                    theme::TRACKING_ACTIVE_BG
+                } else if is_paused {
+                    theme::TRACKING_PAUSED_BG
+                } else {
+                    bg_color
+                };
 
                 let task_color = color_for_task(t);
                 let color_block = if task_color == Color::Reset {
@@ -587,7 +598,11 @@ impl App {
 
         let items = List::new(items)
             .block(inner_block)
-            .highlight_style(if is_active { theme::highlight_active() } else { theme::highlight_inactive() })
+            .highlight_style(if is_active {
+                if selected_is_tracking { theme::highlight_active_tracking() } else { theme::highlight_active() }
+            } else {
+                theme::highlight_inactive()
+            })
             .highlight_symbol(if is_active { "> " } else { "  " })
             .highlight_spacing(HighlightSpacing::Always);
 
